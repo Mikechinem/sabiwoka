@@ -19,7 +19,6 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // 1. Google Auth (Handles both Login & Signup)
   async function signInWithGoogle() {
     setError("");
     const { error } = await supabase.auth.signInWithOAuth({
@@ -31,7 +30,6 @@ export default function LoginPage() {
     if (error) setError(error.message);
   }
 
-  // 2. Email Auth Logic
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -54,12 +52,10 @@ export default function LoginPage() {
         setError(error.message);
         setLoading(false);
       } else {
-        // Most Supabase configs require email confirmation
         alert("Success! Please check your email to confirm your account.");
         setLoading(false);
       }
     } else {
-      // Login Logic
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setError(error.message);
@@ -72,7 +68,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#f8faf8] flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
-      {/* Brand Aesthetic Glow */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-[#134e4a]/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl" />
 
@@ -89,7 +84,7 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-green-900/5 border border-gray-100 px-8 py-10 relative">
-          <div className="flex justify-center mb-8 bg-gray-100 p-1.5 rounded-2xl">
+          <div className="flex justify-center mb-8 bg-gray-100 p-1.5 rounded-2xl relative z-20">
             <button 
               onClick={() => { setMode("login"); setError(""); }}
               className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${mode === 'login' ? 'bg-white text-[#134e4a] shadow-sm' : 'text-gray-400'}`}
@@ -121,7 +116,7 @@ export default function LoginPage() {
             onClick={signInWithGoogle}
             whileTap={{ scale: 0.97 }}
             type="button"
-            className="w-full flex items-center justify-center gap-3 h-12 rounded-full border border-gray-200 text-gray-700 font-bold text-sm mb-6 hover:bg-gray-50 transition-all"
+            className="w-full flex items-center justify-center gap-3 h-12 rounded-full border border-gray-200 text-gray-700 font-bold text-sm mb-6 hover:bg-gray-50 transition-all relative z-20"
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -176,7 +171,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Confirm Password Field (Sign Up Mode Only) */}
             <AnimatePresence>
               {mode === "signup" && (
                 <motion.div
@@ -200,10 +194,10 @@ export default function LoginPage() {
             </AnimatePresence>
 
             {mode === "login" && (
-              <div className="flex justify-end px-1">
+              <div className="flex justify-end px-1 relative z-30">
                 <Link
                   href="/forgot-password"
-                  className="text-xs font-bold text-[#134e4a] opacity-60 hover:opacity-100 transition-opacity"
+                  className="text-xs font-bold text-[#134e4a] opacity-60 hover:opacity-100 transition-opacity cursor-pointer inline-block py-1"
                 >
                   Forgot Password?
                 </Link>
@@ -214,7 +208,7 @@ export default function LoginPage() {
               whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={loading}
-              className="w-full h-14 rounded-full text-white font-black text-sm shadow-lg shadow-green-900/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full h-14 rounded-full text-white font-black text-sm shadow-lg shadow-green-900/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2 relative z-20"
               style={{ background: "#134e4a" }}
             >
               {loading ? "Please wait..." : (
