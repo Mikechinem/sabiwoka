@@ -1,16 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Phone, ShoppingBag, AlertCircle, CheckCircle2, Clock, MessageCircle, XCircle } from "lucide-react";
+import { Phone, ShoppingBag, AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import Link from "next/link";
 import type { Lead } from "@/hooks/useLeads";
+import WhatsAppButton from "@/components/shared/WhatsAppButton"; // Using the shared component
 
 const statusConfig = {
   new: { label: "New", color: "#6b7280", bg: "#f3f4f6" },
   contacted: { label: "Contacted", color: "#134e4a", bg: "#f0fdf4" },
   interested: { label: "Interested", color: "#e1ae1b", bg: "#fefce8" },
   paid: { label: "Paid", color: "#2eb966", bg: "#f0fdf4" },
-  lost: { label: "Lost", color: "#9ca3af", bg: "#f3f4f6" }, // Changed to a neutral grey
+  lost: { label: "Lost", color: "#9ca3af", bg: "#f3f4f6" },
 };
 
 const intentConfig = {
@@ -20,6 +22,8 @@ const intentConfig = {
 };
 
 export default function LeadCard({ lead }: { lead: Lead }) {
+  const [isNudging, setIsNudging] = useState(false);
+
   const status = statusConfig[lead.status] ?? statusConfig.new;
   const intent = intentConfig[lead.intent_level] ?? intentConfig.medium;
 
@@ -28,18 +32,40 @@ export default function LeadCard({ lead }: { lead: Lead }) {
     ? new Date(lead.follow_up_due_at) < new Date() && !isClosed
     : false;
 
-  function sendReminder(e: React.MouseEvent) {
+  // AI Logic for the Magic Nudge
+  async function handleMagicNudge(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!lead.phone) return;
+    
+    if (!lead.phone || isNudging) return;
 
-    const item = lead.item_of_interest ? `the ${lead.item_of_interest}` : "your order";
-    const amount = lead.amount ? ` Your balance is ₦${Number(lead.amount).toLocaleString()}.` : "";
-    const message = encodeURIComponent(
-      `Hi ${lead.full_name}, just checking in about ${item}.${amount} Please let us know when you are ready. Thank you!`
-    );
-    const phone = lead.phone.replace(/[^0-9]/g, "");
-    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+    try {
+      setIsNudging(true);
+
+      // Call the Groq Waiter (API)
+      const response = await fetch("/api/ai/lead-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: lead.full_name,
+          item: lead.item_of_interest || "the items we discussed",
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+
+      // Open WhatsApp with the Groq-generated message
+      const phone = lead.phone.replace(/[^0-9]/g, "");
+      const message = encodeURIComponent(data.message);
+      window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+      
+    } catch (error) {
+      console.error("Nudge failed:", error);
+      alert("Sabi AI couldn't reach Groq. Check your connection!");
+    } finally {
+      setIsNudging(false);
+    }
   }
 
   return (
@@ -52,7 +78,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             : "bg-white border-gray-100 shadow-sm"
         }`}
       >
-        {/* Top row — name and badges */}
+        {/* Header: Name & Badges */}
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <h3 className={`font-bold text-sm truncate ${lead.status === "lost" ? "text-gray-500" : "text-gray-900"}`}>
@@ -83,7 +109,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         </div>
 
-        {/* Item and amount */}
+        {/* Item & Amount Details */}
         {lead.item_of_interest && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <ShoppingBag size={12} />
@@ -96,7 +122,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         )}
 
-        {/* Status specific banners */}
+        {/* Dynamic Alerts */}
         {isOverdue && (
           <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl">
             <AlertCircle size={12} />
@@ -118,8 +144,8 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         )}
 
-        {/* Bottom row */}
-        <div className="flex items-center justify-between">
+        {/* Action Row */}
+        <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1 text-[10px] text-gray-300">
             <Clock size={10} />
             {new Date(lead.created_at).toLocaleDateString("en-NG", {
@@ -127,16 +153,15 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             })}
           </div>
 
+          {/* SHARED COMPONENT: Only shows if deal is active */}
           {!isClosed && lead.phone && (
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              onClick={sendReminder}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-white text-[11px] font-bold shadow-md shadow-green-200"
-              style={{ background: "#25D366" }}
-            >
-              <MessageCircle size={12} />
-              Remind
-            </motion.button>
+            <WhatsAppButton 
+              phone={lead.phone}
+              message="" // Handled by our AI function
+              label="Follow-up"
+              loading={isNudging}
+              onClick={handleMagicNudge}
+            />
           )}
         </div>
       </motion.div>

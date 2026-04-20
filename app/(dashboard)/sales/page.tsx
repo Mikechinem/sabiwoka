@@ -1,136 +1,175 @@
 "use client";
-
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSales, Sale } from "@/hooks/useSales";
+import { useSales } from "@/hooks/useSales";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, ShoppingBag, Clock, X, Mic, Sparkles, PenLine, RotateCcw } from "lucide-react";
+import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2 } from "lucide-react";
 import VoiceRecorder from "@/components/sales/VoiceRecorder";
 import SalesPasteBox from "@/components/sales/SalesPasteBox";
-
-const statusConfig = {
-  paid: { label: "Paid", color: "#2eb966", bg: "#f0fdf4" },
-  partial: { label: "Partial", color: "#e1ae1b", bg: "#fefce8" },
-  unpaid: { label: "Unpaid", color: "#ef4444", bg: "#fef2f2" },
-};
-
-const inputMethodConfig = {
-  manual: { label: "Manual", icon: PenLine, color: "#6b7280", bg: "#f3f4f6" },
-  magic_paste: { label: "Magic Paste", icon: Sparkles, color: "#e1ae1b", bg: "#fefce8" },
-  voice: { label: "Voice", icon: Mic, color: "#134e4a", bg: "#f0fdf4" },
-  invoice_scan: { label: "Invoice Scan", icon: Sparkles, color: "#4685ed", bg: "#eff6ff" },
-};
 
 export default function SalesPage() {
   const { sales, loading, todayRevenue } = useSales();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lastInsertedId, setLastInsertedId] = useState<string | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
+
   const [form, setForm] = useState({
     customer_name: "",
-    customer_phone: "",
     item_name: "",
     total_amount: "",
     amount_paid: "",
-    notes: "",
   });
 
-  function updateForm(key: string, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  const updateForm = (key: string, value: string) => setForm(p => ({ ...p, [key]: value }));
 
-  async function handleMarkUnpaid(sale: Sale) {
-    const supabase = createClient();
+  // --- THE REVERSE LOGIC ---
+  async function handleReverseSale() {
+    if (!lastInsertedId || isUndoing) return;
     try {
-      await supabase.from("sales").update({ amount_paid: 0, payment_status: "unpaid" }).eq("id", sale.id);
-      const { data: existingDebt } = await supabase.from("debts").select("id").eq("sale_id", sale.id).single();
-      if (existingDebt) {
-        await supabase.from("debts").update({ amount_paid: 0, is_settled: false }).eq("id", existingDebt.id);
-      } else {
-        await supabase.from("debts").insert({ user_id: sale.user_id, sale_id: sale.id, customer_name: sale.customer_name, total_amount: sale.total_amount, amount_paid: 0, is_settled: false });
+      setIsUndoing(true);
+      const supabase = createClient();
+      const saleToUndo = sales.find(s => s.id === lastInsertedId);
+
+      if (saleToUndo) {
+        // 1. Move Lead back to active
+        await supabase.from("leads").update({ status: "interested" })
+          .eq("full_name", saleToUndo.customer_name).eq("status", "paid");
+        
+        // 2. Delete Sale (Cascade deletes sale_items and debts automatically)
+        await supabase.from("sales").delete().eq("id", lastInsertedId);
       }
-    } catch (err) { alert("Failed to revert sale."); }
+      setLastInsertedId(null);
+    } catch (err) {
+      alert("Undo failed.");
+    } finally { setIsUndoing(false); }
   }
 
+  // --- THE MULTI-TABLE SAVE ---
   async function handleAddSale() {
-    if (!form.customer_name || !form.total_amount) return;
+    if (!form.customer_name || !form.total_amount || !form.item_name) return;
     setSaving(true);
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const total = parseFloat(form.total_amount);
-    const paid = parseFloat(form.amount_paid || "0");
-    const status = paid === 0 ? "unpaid" : paid >= total ? "paid" : "partial";
+      const total = parseFloat(form.total_amount);
+      const paid = parseFloat(form.amount_paid || "0");
+      const status = paid === 0 ? "unpaid" : paid >= total ? "paid" : "partial";
 
-    const { data: saleData } = await supabase.from("sales").insert({
-      user_id: user.id, customer_name: form.customer_name, total_amount: total, amount_paid: paid, payment_status: status, input_method: "manual", sold_at: new Date().toISOString(),
-    }).select().single();
+      // Step 1: Save to Sales
+      const { data: saleData, error: sErr } = await supabase.from("sales").insert({
+        user_id: user.id, customer_name: form.customer_name,
+        total_amount: total, amount_paid: paid, payment_status: status, sold_at: new Date().toISOString()
+      }).select().single();
 
-    if (saleData && status !== "paid") {
-      await supabase.from("debts").insert({ user_id: user.id, sale_id: saleData.id, customer_name: form.customer_name, total_amount: total, amount_paid: paid, is_settled: false });
-    }
-    setForm({ customer_name: "", customer_phone: "", item_name: "", total_amount: "", amount_paid: "", notes: "" });
-    setShowForm(false);
-    setSaving(false);
+      if (sErr) throw sErr;
+
+      // Step 2: Save to Sale Items
+      await supabase.from("sale_items").insert({
+        sale_id: saleData.id, product_name: form.item_name, quantity: 1, unit_price: total
+      });
+
+      // Step 3: Handle Debt
+      if (status !== "paid") {
+        await supabase.from("debts").insert({ 
+          user_id: user.id, sale_id: saleData.id, customer_name: form.customer_name, 
+          total_amount: total, amount_paid: paid, is_settled: false 
+        });
+      }
+
+      setLastInsertedId(saleData.id);
+      setTimeout(() => setLastInsertedId(null), 10000);
+      setForm({ customer_name: "", item_name: "", total_amount: "", amount_paid: "" });
+      setShowForm(false);
+    } catch (err) { alert("Save failed."); }
+    finally { setSaving(false); }
   }
 
   return (
     <div className="max-w-md mx-auto px-4 pt-20 pb-28">
-      {/* Left-Aligned Action Button */}
       <div className="flex items-center justify-between mb-8">
-        <motion.button 
-          whileTap={{ scale: 0.95 }} 
-          onClick={() => setShowForm(true)} 
-          className="flex items-center gap-1.5 px-5 py-3 rounded-2xl text-white text-sm font-black shadow-lg bg-[#134e4a]"
-        >
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-5 py-3 rounded-2xl text-white text-sm font-black shadow-lg bg-[#134e4a]">
           <Plus size={18} /> Add Sale
-        </motion.button>
+        </button>
         <div className="text-right">
            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Today Sales</p>
            <p className="text-sm font-bold text-[#134e4a]">₦{todayRevenue.toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="space-y-8 mb-12">
-        <div className="px-1"><p className="text-[10px] uppercase font-black text-gray-400 tracking-widest mb-3">Quick Record</p><VoiceRecorder /></div>
-        <div className="px-1"><p className="text-[10px] uppercase font-black text-gray-400 tracking-widest mb-3">Paste from WhatsApp</p><SalesPasteBox /></div>
+      <div className="space-y-6 mb-12">
+        <VoiceRecorder />
+        <SalesPasteBox />
       </div>
 
       <div className="mt-2">
         <h2 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-4 px-1">Money History</h2>
         {loading ? (
-          <div className="space-y-3">{[1, 2, 3].map((i) => (<div key={i} className="h-28 bg-gray-100 rounded-2xl animate-pulse" />))}</div>
-        ) : sales.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
-            <ShoppingBag size={32} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm font-medium">No sales recorded today.</p>
-          </div>
+          <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />)}</div>
         ) : (
           <div className="space-y-3">
-            {sales.map((sale) => {
-              const status = statusConfig[sale.payment_status as keyof typeof statusConfig] ?? statusConfig.unpaid;
-              const method = inputMethodConfig[sale.input_method as keyof typeof inputMethodConfig] ?? inputMethodConfig.manual;
-              const MethodIcon = method.icon;
-              return (
-                <motion.div key={sale.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0"><h3 className="font-bold text-gray-900 text-sm">{sale.customer_name}</h3></div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md" style={{ color: status.color, background: status.bg }}>{status.label}</span>
-                    </div>
+            {sales.map((sale) => (
+              <div key={sale.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-start justify-between mb-1">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm">{sale.customer_name}</h3>
+                    <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                      <ShoppingBag size={10} /> {sale.sale_items?.[0]?.product_name || "General Sale"}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div><p className="text-[10px] font-black text-gray-400 uppercase">Paid</p><p className="font-bold text-[#2eb966]">₦{Number(sale.amount_paid).toLocaleString()}</p></div>
-                    <div className="text-right"><p className="text-[10px] font-black text-gray-400 uppercase">Total</p><p className="font-bold text-gray-900">₦{Number(sale.total_amount).toLocaleString()}</p></div>
-                  </div>
-                </motion.div>
-              );
-            })}
+                  <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-md bg-gray-50 text-gray-500">
+                    {sale.payment_status}
+                  </span>
+                </div>
+                <div className="flex justify-between mt-3 pt-3 border-t border-gray-50">
+                  <div><p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Paid</p><p className="font-bold text-[#2eb966] text-xs">₦{Number(sale.amount_paid).toLocaleString()}</p></div>
+                  <div className="text-right"><p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Total</p><p className="font-bold text-gray-900 text-xs">₦{Number(sale.total_amount).toLocaleString()}</p></div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Manual Sale Modal remains identical to Lead logic */}
+      {/* UNDO BAR */}
+      <AnimatePresence>
+        {lastInsertedId && (
+          <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="fixed bottom-24 left-4 right-4 z-50 bg-[#134e4a] text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="text-green-400" size={18} />
+              <div><p className="text-[11px] font-black uppercase">Recorded!</p><p className="text-[9px] opacity-60 italic">Moving back to leads...</p></div>
+            </div>
+            <button onClick={handleReverseSale} disabled={isUndoing} className="bg-white/10 px-4 py-2 rounded-xl flex items-center gap-2">
+              <RotateCcw size={14} className={isUndoing ? "animate-spin" : ""} />
+              <span className="text-[10px] font-black uppercase">{isUndoing ? "..." : "Undo"}</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FORM MODAL */}
+      {showForm && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl">
+             <div className="flex justify-between mb-6">
+                <h2 className="font-black text-lg">New Sale</h2>
+                <button onClick={() => setShowForm(false)}><X size={20}/></button>
+             </div>
+             <div className="space-y-4 mb-6">
+                <input placeholder="Customer Name" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={form.customer_name} onChange={e => updateForm('customer_name', e.target.value)} />
+                <input placeholder="Item Bought" className="w-full p-4 bg-gray-100/50 rounded-2xl text-sm font-bold" value={form.item_name} onChange={e => updateForm('item_name', e.target.value)} />
+                <div className="flex gap-2">
+                  <input placeholder="Price" type="number" className="w-1/2 p-4 bg-gray-50 rounded-2xl text-sm" value={form.total_amount} onChange={e => updateForm('total_amount', e.target.value)} />
+                  <input placeholder="Paid" type="number" className="w-1/2 p-4 bg-gray-50 rounded-2xl text-sm" value={form.amount_paid} onChange={e => updateForm('amount_paid', e.target.value)} />
+                </div>
+             </div>
+             <button onClick={handleAddSale} disabled={saving} className="w-full py-4 bg-[#134e4a] text-white rounded-2xl font-black">{saving ? "Saving..." : "Record Sale"}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
