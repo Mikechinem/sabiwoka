@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+// Exporting the Sale type so other files can use it
 export type Sale = {
   id: string;
   user_id: string;
@@ -14,16 +15,17 @@ export type Sale = {
   balance: number;
   payment_status: "unpaid" | "partial" | "paid";
   invoice_image_url: string | null;
-  input_method: "manual" | "invoice_scan" | "voice";
+  input_method: "manual" | "invoice_scan" | "voice" | "magic_paste";
   notes: string | null;
   sold_at: string;
   created_at: string;
 };
 
 export function useSales() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]); // Use the Sale type here
   const [loading, setLoading] = useState(true);
-  const [todayRevenue, setTodayRevenue] = useState(0);
+  const [todayRevenue, setTodayRevenue] = useState(0); // STRICT SALES
+  const [todayTotalCash, setTodayTotalCash] = useState(0); // SALES + DEBTS
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,14 +39,27 @@ export function useSales() {
       if (!error && data) {
         setSales(data as Sale[]);
 
-        const today = new Date().toISOString().split("T")[0];
-        const todaySales = data.filter((s) =>
-          s.sold_at.startsWith(today) && s.payment_status !== "unpaid"
-        );
-        const revenue = todaySales.reduce(
-          (sum, s) => sum + Number(s.amount_paid), 0
-        );
-        setTodayRevenue(revenue);
+        // --- THE MIDNIGHT RESET LOGIC ---
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        // Filter for any transaction that happened TODAY
+        const todayData = data.filter((s) => {
+          const saleDate = new Date(s.sold_at);
+          return saleDate >= todayStart;
+        });
+
+        // 1. STRICT SALES (For Sales Page)
+        // Only rows where total_amount > 0 (excludes debt recovery rows)
+        const strictSales = todayData.filter((s) => Number(s.total_amount) > 0);
+        const salesRevenue = strictSales.reduce((sum, s) => sum + Number(s.amount_paid), 0);
+        
+        // 2. TOTAL CASH (For Homepage Dashboard Card)
+        // Everything paid today
+        const totalCash = todayData.reduce((sum, s) => sum + Number(s.amount_paid), 0);
+
+        setTodayRevenue(salesRevenue);
+        setTodayTotalCash(totalCash);
       }
       setLoading(false);
     }
@@ -61,5 +76,5 @@ export function useSales() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  return { sales, loading, todayRevenue };
+  return { sales, loading, todayRevenue, todayTotalCash };
 }

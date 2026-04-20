@@ -7,77 +7,66 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const audio = formData.get("audio") as File;
+    // This is the key! We get the context from the component (leads or sales)
+    const context = (formData.get("context") as string) || "sales"; 
 
     if (!audio) {
       return NextResponse.json({ error: "No audio provided" }, { status: 400 });
     }
 
+    // 1. Transcription - Optimized for Nigerian context
     const transcription = await groq.audio.transcriptions.create({
       file: audio,
       model: "whisper-large-v3-turbo",
       language: "en",
-      prompt: "Nigerian vendor recording a sale. May include Pidgin English, Naira amounts like 10k, 5000 naira, customer names.",
+      prompt: "Nigerian vendor recording business. Pidgin English, Naira (10k, 5k), and names.",
     });
 
     const transcript = transcription.text;
 
+    // 2. Dynamic Prompt Selection
+    const systemPrompts = {
+      sales: `You are a sales assistant. Extract: customer_name, customer_phone, item_name, total_amount, amount_paid, notes. 
+              Patterns: "k"=1000. If "paid full", amount_paid = total_amount.`,
+      
+      leads: `You are a lead generation assistant. Extract potential interest from this voice note.Return ONLY this JSON structure:
+              {
+              "full_name": string,
+               "phone": string,
+                "item_of_interest": string,
+                  "amount": number,
+                  "notes": string
+                     }
+                  Important: Use 'full_name' exactly. Use 'amount' for the budget/price. No extra text.`
+    };
+
+    // 3. AI Parsing using the selected prompt
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
         {
           role: "system",
-          content: `You are a sales assistant for a Nigerian small business vendor.
-Extract sale information from transcribed voice notes.
-The text may be in English, Pidgin English, or a mix of both.
-
-Understand these patterns:
-- "Monica paid for red ankara, gave me 10k, balance is 5k" means total is 15000, paid 10000
-- "Sold 2 bags of rice to Emeka for 40k, he paid 20k" means total 40000, paid 20000
-- "Chioma don pay complete for the shoe" means fully paid
-- "Tunde never pay at all" means amount_paid is 0
-- "k" or "K" always means multiply by 1000 (e.g. 10k = 10000)
-- "complete" or "full" means fully paid
-- "balance" or "remains" or "still owes" means there is an outstanding amount
-
-Extract these fields:
-- customer_name: The customer full name or first name
-- customer_phone: Phone number if mentioned, otherwise null
-- item_name: The product or item sold
-- total_amount: The full price of the item (number only, no currency)
-- amount_paid: How much was actually paid. If fully paid use total_amount. If not paid at all use 0
-- notes: Any extra detail worth noting
-
-Important rules:
-- If text says balance is X and paid is Y, then total = X + Y
-- If text says fully paid or complete, set amount_paid equal to total_amount
-- Always return numbers without commas or currency symbols
-- Return ONLY a valid JSON object. No explanation, no markdown, no extra text.
-- If a field cannot be found, use null`,
+          content: `${systemPrompts[context as keyof typeof systemPrompts]} 
+                    Return ONLY valid JSON. If missing, use null. No markdown.`
         },
-        {
-          role: "user",
-          content: transcript,
-        },
+        { role: "user", content: transcript },
       ],
       temperature: 0.1,
-      max_tokens: 300,
     });
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? "";
     const cleaned = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(cleaned);
 
+    // 4. Dynamic Response - This fixes the "Failed to Parse" error on the Lead page
     return NextResponse.json({
       success: true,
       transcript,
-      sale: parsed,
+      [context === "sales" ? "sale" : "lead"]: parsed, 
     });
 
   } catch (error: any) {
-    console.error("Voice to task error:", error);
-    return NextResponse.json(
-      { error: error.message || "Voice processing failed" },
-      { status: 500 }
-    );
+    console.error("AI Route Error:", error);
+    return NextResponse.json({ error: "Voice processing failed" }, { status: 500 });
   }
 }
