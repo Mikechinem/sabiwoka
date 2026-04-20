@@ -106,33 +106,30 @@ export default function DebtsPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-28">
-    <header className="relative mb-8 pt-4">
-  {/* Subtle "Expectant" Glow - Warm Amber */}
-  <div className="absolute -top-2 -right-4 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl" />
-
+    <div className="max-w-md mx-auto px-4 pt-24 pb-28">
+    <header className="relative mb-6 pt-2">
   <div className="relative z-10">
-    <div className="flex items-center gap-2 mb-1">
-       {/* Collection Icon */}
-       <div className="w-8 h-8 rounded-full bg-[#134e4a] flex items-center justify-center text-white shadow-lg">
-          <span className="text-lg">⏳</span>
-       </div>
-       <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-         Money Outside
-       </h1>
-    </div>
+    {/* Small tag to categorize the page */}
+    <p className="text-[10px] font-black text-[#134e4a] uppercase tracking-[0.2em] mb-1 ml-0.5">
+      Debt Collection
+    </p>
+
+    {/* Scaled down title to stop competing with the Top Logo */}
+    <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-2">
+      Money Outside ⏳
+    </h1>
     
-    <div className="flex items-baseline gap-2">
-      <p className="text-gray-500 font-medium text-sm">
+    <div className="flex items-center gap-2 bg-red-50 w-fit px-3 py-1.5 rounded-xl border border-red-100">
+      <p className="text-gray-500 font-bold text-[10px] uppercase tracking-wider">
         Total to collect:
       </p>
-      <span className="text-xl font-black text-red-500">
+      <span className="text-base font-black text-red-600">
         ₦{totalOutstanding.toLocaleString()}
       </span>
     </div>
     
-    {/* Supportive "Friend" Subtext */}
-   <p className="text-xs text-[#134e4a] font-bold mt-1 italic">
+    {/* Supportive Subtext - kept clean */}
+    <p className="text-[11px] text-[#134e4a] font-bold mt-3 italic opacity-80">
       {totalOutstanding > 0 
         ? "Time to follow up and bring that money home! 🏠" 
         : "Every kobo is accounted for. Great job! ✨"}

@@ -73,7 +73,7 @@ export default function HomeDashboard() {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-gray-50 max-w-md mx-auto px-4 pt-8 pb-32 overflow-hidden font-sans">
+    <div className="relative min-h-screen bg-gray-50 max-w-md mx-auto px-4 pt-20 pb-32 overflow-hidden font-sans">
       
       {/* Aesthetic Background Branding */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden text-[#134e4a]">
