@@ -29,6 +29,13 @@ export default function LeadsPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+function daysSince(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  return days === 0 ? "Today" : `${days} day${days > 1 ? "s" : ""} ago`;
+}
+
+
   async function handleAddLead() {
     if (!form.full_name) return;
     setSaving(true);

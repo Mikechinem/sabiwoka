@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MessageCircle } from "lucide-react";
+import { getWhatsAppLink } from "@/lib/whatsapp/deeplink";
 
 interface WhatsAppButtonProps {
   phone: string;
@@ -23,13 +24,11 @@ export default function WhatsAppButton({
   
   const handleLaunch = (e: React.MouseEvent) => {
     if (onClick) {
-      onClick(e); // If we are using AI to generate the message first
+      onClick(e); 
       return;
     }
 
-    // Default behavior: just open the link
-    const cleanPhone = phone.replace(/[^0-9]/g, "");
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    const url = getWhatsAppLink(phone, message);
     window.open(url, "_blank");
   };
 

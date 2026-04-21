@@ -5,7 +5,8 @@ import { motion } from "framer-motion";
 import { Phone, ShoppingBag, AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
 import Link from "next/link";
 import type { Lead } from "@/hooks/useLeads";
-import WhatsAppButton from "@/components/shared/WhatsAppButton"; // Using the shared component
+import WhatsAppButton from "@/components/shared/WhatsAppButton";
+import { getWhatsAppLink } from "@/lib/whatsapp/deeplink";
 
 const statusConfig = {
   new: { label: "New", color: "#6b7280", bg: "#f3f4f6" },
@@ -32,7 +33,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
     ? new Date(lead.follow_up_due_at) < new Date() && !isClosed
     : false;
 
-  // AI Logic for the Magic Nudge
   async function handleMagicNudge(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -42,7 +42,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
     try {
       setIsNudging(true);
 
-      // Call the Groq Waiter (API)
       const response = await fetch("/api/ai/lead-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,10 +54,8 @@ export default function LeadCard({ lead }: { lead: Lead }) {
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      // Open WhatsApp with the Groq-generated message
-      const phone = lead.phone.replace(/[^0-9]/g, "");
-      const message = encodeURIComponent(data.message);
-      window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+      const url = getWhatsAppLink(lead.phone, data.message);
+      window.open(url, "_blank");
       
     } catch (error) {
       console.error("Nudge failed:", error);
@@ -78,7 +75,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             : "bg-white border-gray-100 shadow-sm"
         }`}
       >
-        {/* Header: Name & Badges */}
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <h3 className={`font-bold text-sm truncate ${lead.status === "lost" ? "text-gray-500" : "text-gray-900"}`}>
@@ -93,12 +89,12 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
           <div className="flex items-center gap-2 ml-2 shrink-0">
             {!isClosed && (
-               <span
-               className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md"
-               style={{ color: intent.color, background: `${intent.color}15` }}
-             >
-               {intent.label}
-             </span>
+              <span
+                className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md"
+                style={{ color: intent.color, background: `${intent.color}15` }}
+              >
+                {intent.label}
+              </span>
             )}
             <span
               className="text-[10px] uppercase font-black px-2 py-0.5 rounded-md"
@@ -109,7 +105,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         </div>
 
-        {/* Item & Amount Details */}
         {lead.item_of_interest && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <ShoppingBag size={12} />
@@ -122,7 +117,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         )}
 
-        {/* Dynamic Alerts */}
         {isOverdue && (
           <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl">
             <AlertCircle size={12} />
@@ -144,7 +138,6 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           </div>
         )}
 
-        {/* Action Row */}
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1 text-[10px] text-gray-300">
             <Clock size={10} />
@@ -153,11 +146,10 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             })}
           </div>
 
-          {/* SHARED COMPONENT: Only shows if deal is active */}
           {!isClosed && lead.phone && (
             <WhatsAppButton 
               phone={lead.phone}
-              message="" // Handled by our AI function
+              message=""
               label="Follow-up"
               loading={isNudging}
               onClick={handleMagicNudge}

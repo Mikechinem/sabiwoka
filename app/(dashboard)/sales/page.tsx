@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSales } from "@/hooks/useSales";
+import { useSales, Sale } from "@/hooks/useSales";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2, Clock } from "lucide-react"; // Added Clock
 import VoiceRecorder from "@/components/sales/VoiceRecorder";
 import SalesPasteBox from "@/components/sales/SalesPasteBox";
 
 export default function SalesPage() {
-  const { sales, loading, todayRevenue } = useSales();
+  const { sales, loading, todayTotalCash } = useSales();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastInsertedId, setLastInsertedId] = useState<string | null>(null);
@@ -16,36 +16,53 @@ export default function SalesPage() {
 
   const [form, setForm] = useState({
     customer_name: "",
+    customer_phone: "",
     item_name: "",
     total_amount: "",
     amount_paid: "",
   });
 
+  // Helper for date display
+  function daysSince(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    return days === 0 ? "Today" : `${days} day${days > 1 ? "s" : ""} ago`;
+  }
+
   const updateForm = (key: string, value: string) => setForm(p => ({ ...p, [key]: value }));
 
-  // --- THE REVERSE LOGIC ---
+  async function restoreLeadAndInventory(sale: Sale) {
+    const supabase = createClient();
+    const targetStatus = "new"; 
+    if (sale.lead_id) {
+      await supabase.from("leads").update({ status: targetStatus }).eq("id", sale.lead_id);
+    } else {
+      await supabase.from("leads").update({ status: targetStatus }).ilike("full_name", sale.customer_name?.trim() || "");
+    }
+    await supabase.from("sales").delete().eq("id", sale.id);
+  }
+
   async function handleReverseSale() {
     if (!lastInsertedId || isUndoing) return;
     try {
       setIsUndoing(true);
-      const supabase = createClient();
       const saleToUndo = sales.find(s => s.id === lastInsertedId);
-
-      if (saleToUndo) {
-        // 1. Move Lead back to active
-        await supabase.from("leads").update({ status: "interested" })
-          .eq("full_name", saleToUndo.customer_name).eq("status", "paid");
-        
-        // 2. Delete Sale (Cascade deletes sale_items and debts automatically)
-        await supabase.from("sales").delete().eq("id", lastInsertedId);
-      }
+      if (saleToUndo) await restoreLeadAndInventory(saleToUndo);
       setLastInsertedId(null);
     } catch (err) {
       alert("Undo failed.");
     } finally { setIsUndoing(false); }
   }
 
-  // --- THE MULTI-TABLE SAVE ---
+  async function handleDeleteSale(sale: Sale) {
+    if (!window.confirm(`Restore ${sale.customer_name} to Active Leads?`)) return;
+    try {
+      await restoreLeadAndInventory(sale);
+    } catch (err) {
+      alert("Action failed.");
+    }
+  }
+
   async function handleAddSale() {
     if (!form.customer_name || !form.total_amount || !form.item_name) return;
     setSaving(true);
@@ -55,37 +72,60 @@ export default function SalesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const cleanName = form.customer_name.trim();
+      const { data: matchedLead } = await supabase
+        .from("leads")
+        .select("id")
+        .ilike("full_name", cleanName)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
       const total = parseFloat(form.total_amount);
       const paid = parseFloat(form.amount_paid || "0");
       const status = paid === 0 ? "unpaid" : paid >= total ? "paid" : "partial";
 
-      // Step 1: Save to Sales
       const { data: saleData, error: sErr } = await supabase.from("sales").insert({
-        user_id: user.id, customer_name: form.customer_name,
-        total_amount: total, amount_paid: paid, payment_status: status, sold_at: new Date().toISOString()
+        user_id: user.id, 
+        lead_id: matchedLead?.id || null, 
+        customer_name: cleanName,
+        customer_phone: form.customer_phone,
+        total_amount: total, 
+        amount_paid: paid, 
+        payment_status: status, 
+        sold_at: new Date().toISOString()
       }).select().single();
 
       if (sErr) throw sErr;
 
-      // Step 2: Save to Sale Items
+      if (matchedLead) {
+        await supabase.from("leads").update({ status: "paid" }).eq("id", matchedLead.id);
+      }
+
       await supabase.from("sale_items").insert({
         sale_id: saleData.id, product_name: form.item_name, quantity: 1, unit_price: total
       });
 
-      // Step 3: Handle Debt
       if (status !== "paid") {
         await supabase.from("debts").insert({ 
-          user_id: user.id, sale_id: saleData.id, customer_name: form.customer_name, 
-          total_amount: total, amount_paid: paid, is_settled: false 
+          user_id: user.id, 
+          sale_id: saleData.id, 
+          customer_name: cleanName, 
+          customer_phone: form.customer_phone, 
+          total_amount: total, 
+          amount_paid: paid, 
+          is_settled: false 
         });
       }
 
       setLastInsertedId(saleData.id);
       setTimeout(() => setLastInsertedId(null), 10000);
-      setForm({ customer_name: "", item_name: "", total_amount: "", amount_paid: "" });
+      setForm({ customer_name: "", customer_phone: "", item_name: "", total_amount: "", amount_paid: "" });
       setShowForm(false);
-    } catch (err) { alert("Save failed."); }
-    finally { setSaving(false); }
+    } catch (err) { 
+      alert("Save failed."); 
+    } finally { 
+      setSaving(false); 
+    }
   }
 
   return (
@@ -95,8 +135,8 @@ export default function SalesPage() {
           <Plus size={18} /> Add Sale
         </button>
         <div className="text-right">
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Today Sales</p>
-           <p className="text-sm font-bold text-[#134e4a]">₦{todayRevenue.toLocaleString()}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Cash Today</p>
+           <p className="text-sm font-bold text-[#134e4a]">₦{todayTotalCash.toLocaleString()}</p>
         </div>
       </div>
 
@@ -112,12 +152,25 @@ export default function SalesPage() {
         ) : (
           <div className="space-y-3">
             {sales.map((sale) => (
-              <div key={sale.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div key={sale.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative group">
+                <button 
+                  onClick={() => handleDeleteSale(sale)}
+                  className="absolute top-4 right-4 flex items-center gap-1.5 p-2 px-3 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-colors"
+                >
+                  <RotateCcw size={12} className="shrink-0" />
+                  <span className="text-[10px] font-black uppercase tracking-tighter">Mistake?</span>
+                </button>
+
                 <div className="flex items-start justify-between mb-1">
-                  <div>
+                  <div className="pr-20">
                     <h3 className="font-bold text-gray-900 text-sm">{sale.customer_name}</h3>
                     <p className="text-[11px] text-gray-400 flex items-center gap-1">
                       <ShoppingBag size={10} /> {sale.sale_items?.[0]?.product_name || "General Sale"}
+                    </p>
+                    
+                    {/* --- ADDED DATE DISPLAY --- */}
+                    <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-1">
+                      <Clock size={10} /> {daysSince(sale.sold_at)}
                     </p>
                   </div>
                   <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-md bg-gray-50 text-gray-500">
@@ -134,13 +187,12 @@ export default function SalesPage() {
         )}
       </div>
 
-      {/* UNDO BAR */}
       <AnimatePresence>
         {lastInsertedId && (
           <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="fixed bottom-24 left-4 right-4 z-50 bg-[#134e4a] text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="text-green-400" size={18} />
-              <div><p className="text-[11px] font-black uppercase">Recorded!</p><p className="text-[9px] opacity-60 italic">Moving back to leads...</p></div>
+              <div><p className="text-[11px] font-black uppercase">Recorded!</p><p className="text-[9px] opacity-60 italic">Undo window open...</p></div>
             </div>
             <button onClick={handleReverseSale} disabled={isUndoing} className="bg-white/10 px-4 py-2 rounded-xl flex items-center gap-2">
               <RotateCcw size={14} className={isUndoing ? "animate-spin" : ""} />
@@ -150,16 +202,16 @@ export default function SalesPage() {
         )}
       </AnimatePresence>
 
-      {/* FORM MODAL */}
       {showForm && (
         <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl">
              <div className="flex justify-between mb-6">
                 <h2 className="font-black text-lg">New Sale</h2>
                 <button onClick={() => setShowForm(false)}><X size={20}/></button>
              </div>
              <div className="space-y-4 mb-6">
                 <input placeholder="Customer Name" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={form.customer_name} onChange={e => updateForm('customer_name', e.target.value)} />
+                <input placeholder="Phone Number" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={form.customer_phone} onChange={e => updateForm('customer_phone', e.target.value)} />
                 <input placeholder="Item Bought" className="w-full p-4 bg-gray-100/50 rounded-2xl text-sm font-bold" value={form.item_name} onChange={e => updateForm('item_name', e.target.value)} />
                 <div className="flex gap-2">
                   <input placeholder="Price" type="number" className="w-1/2 p-4 bg-gray-50 rounded-2xl text-sm" value={form.total_amount} onChange={e => updateForm('total_amount', e.target.value)} />
