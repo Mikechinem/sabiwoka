@@ -21,7 +21,12 @@ interface FakeAlertProps {
 
 export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
   const verdict = result?.verdict || "SUSPICIOUS";
-  const probability = result?.isFakeProbability ?? 50;
+  
+  // LOGIC FLIP: Convert "Risk" to "Confidence"
+  // Risk of 0.2% becomes 99.8% Confidence
+  const riskProbability = result?.isFakeProbability ?? 50;
+  const confidenceScore = Number((100 - riskProbability).toFixed(1));
+
   const flags = result?.redFlags || [];
   const amount = result?.amount ?? null;
   const bank = result?.bankName ?? null;
@@ -31,8 +36,8 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
   const reference = result?.reference ?? null;
   const summary = result?.rawTextSummary ?? null;
 
-  const isDanger = verdict === "LIKELY_FAKE" || probability > 70;
-  const isClean = verdict === "REAL" && probability < 30;
+  const isDanger = verdict === "LIKELY_FAKE" || riskProbability > 70;
+  const isClean = verdict === "REAL" && riskProbability < 30;
 
   const theme = isDanger
     ? {
@@ -48,7 +53,7 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
         accent: "bg-green-500", text: "text-green-700",
         bar: "bg-green-500", btn: "bg-green-600",
         icon: <ShieldCheck size={24} />,
-        label: "Looks Real",
+        label: "Verified Real",
       }
     : {
         bg: "bg-amber-50", border: "border-amber-200",
@@ -64,7 +69,7 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
       animate={{ scale: 1, opacity: 1 }}
       className={`rounded-[2.5rem] p-6 border-2 overflow-hidden relative shadow-2xl ${theme.bg} ${theme.border} max-w-md mx-auto`}
     >
-      {/* Background Icon Watermark */}
+      {/* Background Watermark */}
       <div className={`absolute -right-6 -bottom-6 opacity-[0.05] ${theme.text} pointer-events-none`}>
         {theme.icon}
       </div>
@@ -76,7 +81,7 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
             {theme.icon}
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">Sabi Auditor</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">Sabi Security</p>
             <h3 className={`text-xl font-black leading-none ${theme.text}`}>{theme.label}</h3>
           </div>
         </div>
@@ -87,22 +92,29 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
 
       <div className="space-y-4 relative z-10">
         
-        {/* Risk Bar Section */}
-        <div className="bg-white/60 backdrop-blur-md p-4 rounded-[1.8rem] border border-white/50">
+        {/* Confidence Bar — HIGH is GOOD now */}
+        <div className="bg-white/60 backdrop-blur-md p-5 rounded-[2rem] border border-white/50">
           <div className="flex justify-between items-end mb-2">
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Security Score</span>
-            <span className={`text-lg font-black ${theme.text}`}>{probability}%</span>
+            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Authenticity Score</span>
+            <span className={`text-lg font-black ${theme.text}`}>{confidenceScore}%</span>
           </div>
-          <div className="w-full h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
+          <div className="w-full h-3 bg-gray-200/50 rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${probability}%` }}
-              className={`h-full ${theme.bar}`}
+              animate={{ width: `${confidenceScore}%` }}
+              className={`h-full ${theme.bar} shadow-[0_0_10px_rgba(0,0,0,0.1)]`}
             />
           </div>
+          <p className="text-[10px] text-gray-500 mt-2 font-bold italic">
+            {confidenceScore > 70 
+              ? "High Trust: This receipt looks very clean." 
+              : confidenceScore > 30 
+              ? "Medium Trust: Verify with your bank app details." 
+              : "Low Trust: High probability of a fake alert."}
+          </p>
         </div>
 
-        {/* Amount & Bank Grid */}
+        {/* Data Grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white/50 p-4 rounded-2xl border border-white/50">
             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Amount</p>
@@ -118,7 +130,7 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
           </div>
         </div>
 
-        {/* Detailed Info - Improved Alignment */}
+        {/* Audit Details */}
         {(sender || recipient || date || reference) && (
           <div className="bg-white/70 p-5 rounded-[2rem] border border-white space-y-3 shadow-sm">
             {[
@@ -132,13 +144,13 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
                   {item.icon}
                   <span className="text-[9px] font-black uppercase tracking-tighter">{item.label}</span>
                 </div>
-                <p className="text-[13px] font-bold text-gray-800 pl-5 break-words">{item.value}</p>
+                <p className="text-[13px] font-bold text-gray-800 pl-5 break-words uppercase">{item.value}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* AI Summary Section */}
+        {/* AI Insight Summary */}
         {summary && (
           <div className="bg-white/40 p-4 rounded-2xl border border-white/40 flex items-start gap-3">
             <FileText size={16} className="text-gray-400 shrink-0 mt-0.5" />
@@ -148,12 +160,12 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
           </div>
         )}
 
-        {/* Red Flags / Issues Section */}
+        {/* Audit Red Flags */}
         {flags.length > 0 && (
           <div className="bg-white/90 p-5 rounded-[2rem] border border-red-100 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Info size={14} className="text-red-400" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Analysis Notes</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Scanner Findings</p>
             </div>
             <ul className="space-y-2">
               {flags.map((flag, i) => (
@@ -166,12 +178,12 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
           </div>
         )}
 
-        {/* Final CTA Button */}
+        {/* Scan Another Button */}
         <button
           onClick={onReset}
           className={`w-full py-4 mt-2 rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.15em] flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95 hover:brightness-110 text-white ${theme.btn}`}
         >
-          <RefreshCw size={14} /> Scan New Receipt
+          <RefreshCw size={14} /> Scan Next Receipt
         </button>
       </div>
     </motion.div>
