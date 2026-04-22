@@ -39,6 +39,31 @@ export default function PaymentScanner() {
     setCameraActive(false);
   };
 
+  const sendToAI = async (base64Image: string) => {
+    try {
+      const response = await fetch("/api/ai/payment-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64Image }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Scanner failed");
+      }
+
+      setResult(data);
+      stopCamera();
+    } catch (err: any) {
+      console.error("Frontend Scan Error:", err.message);
+      alert("Scanner error: " + err.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // --- REWRITTEN: Handle Gallery Upload ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -48,41 +73,35 @@ export default function PaymentScanner() {
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const base64Image = (reader.result as string).split(",")[1];
+      // Send the full data URL to the backend
+      const base64Image = reader.result as string; 
       await sendToAI(base64Image);
     };
     reader.readAsDataURL(file);
   };
 
-  const sendToAI = async (base64Image: string) => {
-    try {
-      const response = await fetch("/api/ai/payment-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64Image }),
-      });
-      const data = await response.json();
-      setResult(data);
-      stopCamera();
-    } catch (err) {
-      alert("Scanner error. Please try again.");
-    } finally {
-      setScanning(false);
-    }
-  };
-
+  // --- REWRITTEN: Capture from Camera ---
   const captureAndScan = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
     setScanning(true);
+    
     const canvas = canvasRef.current;
     const video = videoRef.current;
+    
+    // Set resolution based on actual video stream size
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    
     const ctx = canvas.getContext("2d");
-    ctx?.drawImage(video, 0, 0);
-    const base64Image = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    if (!ctx) return;
+    
+    ctx.drawImage(video, 0, 0);
+    
+    // High quality capture (0.9) to preserve text clarity
+    const base64Image = canvas.toDataURL("image/jpeg", 0.9);
+    
     await sendToAI(base64Image);
-  }, [stream]);
+  }, [videoRef, canvasRef, stream]);
 
   return (
     <div className="w-full space-y-4">
@@ -142,7 +161,7 @@ export default function PaymentScanner() {
         )}
       </AnimatePresence>
 
-      {/* RESULTS DISPLAY - Using the new FakeAlertResult component */}
+      {/* RESULTS DISPLAY */}
       {result && (
         <FakeAlertResult 
           result={result} 

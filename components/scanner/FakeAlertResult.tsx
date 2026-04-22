@@ -62,25 +62,22 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
     <motion.div
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className={`rounded-[2.5rem] p-7 border-2 overflow-hidden relative shadow-2xl ${theme.bg} ${theme.border}`}
+      className={`rounded-[2.5rem] p-6 border-2 overflow-hidden relative shadow-2xl ${theme.bg} ${theme.border} max-w-md mx-auto`}
     >
-      <div className="absolute -right-4 -bottom-4 opacity-[0.05] text-red-900 pointer-events-none">
-        <ShieldAlert size={150} />
+      {/* Background Icon Watermark */}
+      <div className={`absolute -right-6 -bottom-6 opacity-[0.05] ${theme.text} pointer-events-none`}>
+        {theme.icon}
       </div>
 
       {/* Header */}
       <div className="flex justify-between items-start mb-6 relative z-10">
         <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-2xl ${theme.accent} text-white`}>
+          <div className={`p-3 rounded-2xl ${theme.accent} text-white shadow-lg`}>
             {theme.icon}
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">
-              Sabi Analysis
-            </p>
-            <h3 className={`text-xl font-black leading-none ${theme.text}`}>
-              {theme.label}
-            </h3>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">Sabi Auditor</p>
+            <h3 className={`text-xl font-black leading-none ${theme.text}`}>{theme.label}</h3>
           </div>
         </div>
         <button onClick={onReset} className="p-2 hover:bg-black/5 rounded-full transition-colors">
@@ -89,124 +86,92 @@ export default function FakeAlertResult({ result, onReset }: FakeAlertProps) {
       </div>
 
       <div className="space-y-4 relative z-10">
-
-        {/* AI Summary — plain English */}
-        {summary && (
-          <div className="bg-white/70 p-4 rounded-2xl border border-white flex items-start gap-2">
-            <FileText size={13} className="text-gray-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-gray-700 font-medium leading-relaxed">{summary}</p>
-          </div>
-        )}
-
-        {/* Risk bar */}
-        <div className="bg-white/60 backdrop-blur-sm p-4 rounded-2xl border border-white">
+        
+        {/* Risk Bar Section */}
+        <div className="bg-white/60 backdrop-blur-md p-4 rounded-[1.8rem] border border-white/50">
           <div className="flex justify-between items-end mb-2">
-            <span className="text-[10px] font-black uppercase text-gray-400">Risk Level</span>
+            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Security Score</span>
             <span className={`text-lg font-black ${theme.text}`}>{probability}%</span>
           </div>
-          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="w-full h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${probability}%` }}
               className={`h-full ${theme.bar}`}
             />
           </div>
-          <p className="text-[9px] text-gray-400 mt-1.5 font-medium">
-            {probability < 30
-              ? "Low risk — payment appears genuine"
-              : probability < 70
-              ? "Medium risk — verify with your bank app"
-              : "High risk — do not accept this payment"}
-          </p>
         </div>
 
-        {/* Amount and Bank — only show if found */}
+        {/* Amount & Bank Grid */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white/40 p-4 rounded-2xl">
-            <p className="text-[9px] font-black text-gray-400 uppercase">Amount</p>
-            <p className="text-sm font-black text-gray-800">
-              {amount !== null ? `₦${Number(amount).toLocaleString()}` : "Not found"}
+          <div className="bg-white/50 p-4 rounded-2xl border border-white/50">
+            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Amount</p>
+            <p className="text-base font-black text-gray-900">
+              {amount !== null ? `₦${Number(amount).toLocaleString()}` : "—"}
             </p>
           </div>
-          <div className="bg-white/40 p-4 rounded-2xl">
-            <p className="text-[9px] font-black text-gray-400 uppercase">Bank</p>
-            <p className="text-sm font-black text-gray-800 truncate">
-              {bank ?? "Not found"}
+          <div className="bg-white/50 p-4 rounded-2xl border border-white/50">
+            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Bank</p>
+            <p className="text-base font-black text-gray-900 truncate">
+              {bank ?? "Unknown"}
             </p>
           </div>
         </div>
 
-        {/* Sender, recipient, date, reference */}
+        {/* Detailed Info - Improved Alignment */}
         {(sender || recipient || date || reference) && (
-          <div className="bg-white/60 p-4 rounded-2xl border border-white space-y-2">
-            {sender && (
-              <div className="flex items-center gap-2 text-xs text-gray-700">
-                <User size={12} className="text-gray-400 shrink-0" />
-                <span className="text-gray-400 font-bold uppercase text-[9px] w-16 shrink-0">Sender</span>
-                <span className="font-bold truncate">{sender}</span>
+          <div className="bg-white/70 p-5 rounded-[2rem] border border-white space-y-3 shadow-sm">
+            {[
+              { icon: <User size={14} />, label: "Sender", value: sender },
+              { icon: <User size={14} />, label: "Recipient", value: recipient },
+              { icon: <Calendar size={14} />, label: "Date", value: date },
+              { icon: <Hash size={14} />, label: "Ref", value: reference },
+            ].map((item, idx) => item.value && (
+              <div key={idx} className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5 opacity-40">
+                  {item.icon}
+                  <span className="text-[9px] font-black uppercase tracking-tighter">{item.label}</span>
+                </div>
+                <p className="text-[13px] font-bold text-gray-800 pl-5 break-words">{item.value}</p>
               </div>
-            )}
-            {recipient && (
-              <div className="flex items-center gap-2 text-xs text-gray-700">
-                <User size={12} className="text-gray-400 shrink-0" />
-                <span className="text-gray-400 font-bold uppercase text-[9px] w-16 shrink-0">Recipient</span>
-                <span className="font-bold truncate">{recipient}</span>
-              </div>
-            )}
-            {date && (
-              <div className="flex items-center gap-2 text-xs text-gray-700">
-                <Calendar size={12} className="text-gray-400 shrink-0" />
-                <span className="text-gray-400 font-bold uppercase text-[9px] w-16 shrink-0">Date</span>
-                <span className="font-bold">{date}</span>
-              </div>
-            )}
-            {reference && (
-              <div className="flex items-center gap-2 text-xs text-gray-700">
-                <Hash size={12} className="text-gray-400 shrink-0" />
-                <span className="text-gray-400 font-bold uppercase text-[9px] w-16 shrink-0">Ref</span>
-                <span className="font-bold truncate">{reference}</span>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
-        {/* Red flags */}
+        {/* AI Summary Section */}
+        {summary && (
+          <div className="bg-white/40 p-4 rounded-2xl border border-white/40 flex items-start gap-3">
+            <FileText size={16} className="text-gray-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-gray-600 font-medium leading-relaxed italic">
+              "{summary}"
+            </p>
+          </div>
+        )}
+
+        {/* Red Flags / Issues Section */}
         {flags.length > 0 && (
-          <div className="bg-white/80 p-5 rounded-[1.8rem] border border-white shadow-sm">
-            <div className="flex items-center gap-2 mb-3 text-gray-500">
-              <Info size={14} />
-              <p className="text-[10px] font-black uppercase tracking-widest">
-                Issues Found
-              </p>
+          <div className="bg-white/90 p-5 rounded-[2rem] border border-red-100 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Info size={14} className="text-red-400" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Analysis Notes</p>
             </div>
             <ul className="space-y-2">
               {flags.map((flag, i) => (
-                <li
-                  key={i}
-                  className="text-[11px] font-bold text-gray-700 flex items-start gap-2 leading-tight"
-                >
-                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${theme.bar}`} />
-                  {flag}
+                <li key={i} className="text-[11px] font-bold text-gray-700 flex items-start gap-2.5">
+                  <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${theme.bar}`} />
+                  <span className="leading-tight">{flag}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Clean result */}
-        {isClean && flags.length === 0 && (
-          <div className="bg-white/80 p-4 rounded-2xl border border-green-100 text-center">
-            <p className="text-xs font-bold text-green-600">
-              No red flags detected. This receipt appears legitimate. Always confirm in your bank app to be 100% sure.
-            </p>
-          </div>
-        )}
-
+        {/* Final CTA Button */}
         <button
           onClick={onReset}
-          className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 text-white ${theme.btn}`}
+          className={`w-full py-4 mt-2 rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.15em] flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95 hover:brightness-110 text-white ${theme.btn}`}
         >
-          <RefreshCw size={14} /> Scan Another Receipt
+          <RefreshCw size={14} /> Scan New Receipt
         </button>
       </div>
     </motion.div>
