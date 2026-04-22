@@ -3,9 +3,15 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSales, Sale } from "@/hooks/useSales";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2, Clock } from "lucide-react"; 
+import { Plus, X, RotateCcw, CheckCircle2 } from "lucide-react"; 
 import VoiceRecorder from "@/components/sales/VoiceRecorder";
 import SalesPasteBox from "@/components/sales/SalesPasteBox";
+
+// NEW IMPORTS
+import SaleCard from "@/components/sales/SaleCard";
+import InvoiceBrand from "@/components/sales/InvoiceBrand";
+import InvoiceUploader from "@/components/sales/InvoiceUploader";
+import { useInvoiceGenerator } from "@/hooks/useInvoiceGenerator";
 
 export default function SalesPage() {
   const { sales, loading, todaySales } = useSales();
@@ -13,6 +19,10 @@ export default function SalesPage() {
   const [saving, setSaving] = useState(false);
   const [lastInsertedId, setLastInsertedId] = useState<string | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
+
+  // NEW STATE FOR PNG GENERATION
+  const { invoiceRef, generateImage } = useInvoiceGenerator();
+  const [activeSaleForReceipt, setActiveSaleForReceipt] = useState<Sale | null>(null);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -29,6 +39,26 @@ export default function SalesPage() {
   }
 
   const updateForm = (key: string, value: string) => setForm(p => ({ ...p, [key]: value }));
+
+  // NEW: HANDLE AUTO-FILL FROM SCANNER
+  const handleExtractedData = (data: any) => {
+    setForm({
+      customer_name: data.customer_name || "",
+      customer_phone: data.customer_phone || "",
+      item_name: data.item_name || "",
+      total_amount: data.total_amount?.toString() || "",
+      amount_paid: data.amount_paid?.toString() || "",
+    });
+  };
+
+  // NEW: HANDLE PNG GENERATION TRIGGER
+  const handleShare = async (sale: Sale) => {
+    setActiveSaleForReceipt(sale);
+    // Tiny timeout ensures the hidden InvoiceBrand has time to render the specific sale data
+    setTimeout(() => {
+      generateImage(sale.customer_name || "Customer");
+    }, 100);
+  };
 
   async function restoreLeadAndInventory(sale: Sale) {
     const supabase = createClient();
@@ -129,6 +159,11 @@ export default function SalesPage() {
 
   return (
     <div className="max-w-md mx-auto px-4 pt-20 pb-28">
+      {/* HIDDEN INVOICE TEMPLATE FOR PNG GENERATION */}
+      {activeSaleForReceipt && (
+        <InvoiceBrand ref={invoiceRef} sale={activeSaleForReceipt} />
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-5 py-3 rounded-2xl text-white text-sm font-black shadow-lg bg-[#134e4a]">
           <Plus size={18} /> Add Sale
@@ -151,34 +186,13 @@ export default function SalesPage() {
         ) : (
           <div className="space-y-3">
             {sales.map((sale) => (
-              <div key={sale.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative group">
-                <button 
-                  onClick={() => handleDeleteSale(sale)}
-                  className="absolute top-4 right-4 flex items-center gap-1.5 p-2 px-3 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-colors"
-                >
-                  <RotateCcw size={12} className="shrink-0" />
-                  <span className="text-[10px] font-black uppercase tracking-tighter">Mistake?</span>
-                </button>
-
-                <div className="flex items-start justify-between mb-1">
-                  <div className="pr-20">
-                    <h3 className="font-bold text-gray-900 text-sm">{sale.customer_name}</h3>
-                    <p className="text-[11px] text-gray-400 flex items-center gap-1">
-                      <ShoppingBag size={10} /> {sale.sale_items?.[0]?.product_name || "General Sale"}
-                    </p>
-                    <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-1">
-                      <Clock size={10} /> {daysSince(sale.sold_at)}
-                    </p>
-                  </div>
-                  <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-md bg-gray-50 text-gray-500">
-                    {sale.payment_status}
-                  </span>
-                </div>
-                <div className="flex justify-between mt-3 pt-3 border-t border-gray-50">
-                  <div><p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Paid</p><p className="font-bold text-[#2eb966] text-xs">₦{Number(sale.amount_paid).toLocaleString()}</p></div>
-                  <div className="text-right"><p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Total</p><p className="font-bold text-gray-900 text-xs">₦{Number(sale.total_amount).toLocaleString()}</p></div>
-                </div>
-              </div>
+              <SaleCard 
+                key={sale.id} 
+                sale={sale} 
+                daysSince={daysSince} 
+                onDelete={handleDeleteSale}
+                onShare={handleShare}
+              />
             ))}
           </div>
         )}
@@ -206,6 +220,10 @@ export default function SalesPage() {
                 <h2 className="font-black text-lg">New Sale</h2>
                 <button onClick={() => setShowForm(false)}><X size={20}/></button>
              </div>
+
+             {/* AUTO-FILL SCANNER SECTION */}
+             <InvoiceUploader onDataExtracted={handleExtractedData} />
+
              <div className="space-y-4 mb-6">
                 <input placeholder="Customer Name" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={form.customer_name} onChange={e => updateForm('customer_name', e.target.value)} />
                 <input placeholder="Phone Number" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={form.customer_phone} onChange={e => updateForm('customer_phone', e.target.value)} />
