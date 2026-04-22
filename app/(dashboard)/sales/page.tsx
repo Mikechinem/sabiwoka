@@ -3,12 +3,12 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSales, Sale } from "@/hooks/useSales";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2, Clock } from "lucide-react"; // Added Clock
+import { Plus, ShoppingBag, X, RotateCcw, CheckCircle2, Clock } from "lucide-react"; 
 import VoiceRecorder from "@/components/sales/VoiceRecorder";
 import SalesPasteBox from "@/components/sales/SalesPasteBox";
 
 export default function SalesPage() {
-  const { sales, loading, todayTotalCash } = useSales();
+  const { sales, loading, todaySales } = useSales();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastInsertedId, setLastInsertedId] = useState<string | null>(null);
@@ -22,7 +22,6 @@ export default function SalesPage() {
     amount_paid: "",
   });
 
-  // Helper for date display
   function daysSince(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -135,8 +134,8 @@ export default function SalesPage() {
           <Plus size={18} /> Add Sale
         </button>
         <div className="text-right">
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Cash Today</p>
-           <p className="text-sm font-bold text-[#134e4a]">₦{todayTotalCash.toLocaleString()}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sales Cash Today</p>
+           <p className="text-sm font-bold text-[#134e4a]">₦{(todaySales || 0).toLocaleString()}</p>
         </div>
       </div>
 
@@ -167,8 +166,6 @@ export default function SalesPage() {
                     <p className="text-[11px] text-gray-400 flex items-center gap-1">
                       <ShoppingBag size={10} /> {sale.sale_items?.[0]?.product_name || "General Sale"}
                     </p>
-                    
-                    {/* --- ADDED DATE DISPLAY --- */}
                     <p className="text-[10px] text-gray-300 flex items-center gap-1 mt-1">
                       <Clock size={10} /> {daysSince(sale.sold_at)}
                     </p>

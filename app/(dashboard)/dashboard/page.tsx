@@ -6,7 +6,7 @@ import { TrendingUp, Users, Wallet, Plus, Package, Loader2, ChevronRight } from 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DynamicGreeting from "@/components/dashboard/DynamicGreeting";
-import { useSales } from "@/hooks/useSales"; // 1. Import our custom hook
+import { useSales } from "@/hooks/useSales"; 
 
 export default function HomeDashboard() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -14,7 +14,6 @@ export default function HomeDashboard() {
   const [roi, setRoi] = useState(0);
   const [totalUnpaid, setTotalUnpaid] = useState(0);
   
-  // 2. Use the hook to get the separate money totals
   const { todayTotalCash } = useSales(); 
 
   useEffect(() => {
@@ -25,7 +24,6 @@ export default function HomeDashboard() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Fetch Priority leads
         const { data: leadsData } = await supabase
           .from("leads")
           .select("*")
@@ -35,14 +33,12 @@ export default function HomeDashboard() {
           .order("created_at", { ascending: false })
           .limit(5);
 
-        // Calculate ROI (Potential money in pipeline)
         const { data: allPending } = await supabase
           .from("leads")
           .select("amount")
           .eq("user_id", user.id)
           .eq("status", "interested");
 
-        // Calculate Total Unpaid Debts (Across all time)
         const { data: debtRecords } = await supabase
           .from("debts")
           .select("balance")
@@ -62,7 +58,6 @@ export default function HomeDashboard() {
 
     fetchDashboardData();
 
-    // Note: Realtime for sales is handled inside the useSales hook now
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "debts" }, fetchDashboardData)
@@ -74,8 +69,6 @@ export default function HomeDashboard() {
 
   return (
     <div className="relative min-h-screen bg-gray-50 max-w-md mx-auto px-4 pt-20 pb-32 overflow-hidden font-sans">
-      
-      {/* Aesthetic Background Branding */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden text-[#134e4a]">
         <span className="absolute -left-4 top-10 text-[7rem] font-bold italic opacity-[0.05] -rotate-12 leading-none" style={{ fontFamily: "Georgia, serif" }}>sabi</span>
         <span className="absolute -right-8 top-[40%] text-[7rem] font-bold italic opacity-[0.05] rotate-12 leading-none" style={{ fontFamily: "Georgia, serif" }}>woka</span>
@@ -96,7 +89,7 @@ export default function HomeDashboard() {
               Revenue (Sales + Debts Recovered)
             </p>
             <h2 className="text-4xl font-black mt-1 mb-5">
-              ₦{todayTotalCash.toLocaleString()}
+              ₦{(todayTotalCash || 0).toLocaleString()}
             </h2>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-teal-200 text-[11px] font-semibold">
@@ -113,7 +106,6 @@ export default function HomeDashboard() {
           <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
         </motion.div>
 
-        {/* Metric Grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <Link href="/leads" className="bg-white/90 p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-3">
             <div className="w-10 h-10 bg-[#e1ae1b]/10 rounded-2xl flex items-center justify-center text-[#e1ae1b]">
@@ -135,7 +127,6 @@ export default function HomeDashboard() {
           </Link>
         </div>
 
-        {/* Priority List */}
         <div className="mt-4">
           <div className="flex justify-between items-center mb-4 px-1">
             <h3 className="font-bold text-gray-800 text-sm tracking-tight">Priority Follow-ups</h3>
@@ -200,7 +191,6 @@ export default function HomeDashboard() {
             </Link>
           </div>
 
-          {/* Assistant Card */}
           <div className="bg-[#1b1d2e] p-6 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden mb-6">
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">
