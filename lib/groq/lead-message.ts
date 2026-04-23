@@ -15,7 +15,9 @@ export async function generateLeadFollowUp(
         Your goal is to follow up with a potential customer who showed interest in an item.
         - Use "Sabi" vendor vibes (e.g., "Blessings," "Top quality," "Don't miss out").
         - Keep it very short and conversational.
-        - Use Nigerian English/Pidgin flavors.`
+        - Use Nigerian English.
+        - Make it  a standard follow up message style that speak to high income earning nigerian`
+        
       },
       {
         role: "user",
