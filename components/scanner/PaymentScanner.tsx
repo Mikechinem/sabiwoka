@@ -1,5 +1,5 @@
 "use client";
-
+import { ScanResult } from "@/types/scan-result";
 import { useRef, useState, useCallback } from "react";
 import { Camera, RefreshCw, ShieldAlert, X, Loader2, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,7 +11,7 @@ export default function PaymentScanner() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
 
   const startCamera = async () => {
@@ -105,35 +105,44 @@ export default function PaymentScanner() {
 
   return (
     <div className="w-full space-y-4">
-      {/* INITIAL BUTTONS */}
-      {!cameraActive && !result && (
-        <div className="grid grid-cols-1 gap-3">
-          <button
-            onClick={startCamera}
-            className="w-full py-10 border-2 border-[#134e4a] border-dashed rounded-[2.5rem] flex flex-col items-center justify-center gap-2 text-[#134e4a] bg-teal-50/30"
-          >
-            <Camera size={28} />
-            <span className="text-xs font-black uppercase tracking-widest">Use Live Camera</span>
-          </button>
+    {/* INITIAL BUTTONS */}
+{!cameraActive && !result && (
+  <div className="grid grid-cols-1 gap-3">
+    <button
+      onClick={startCamera}
+      className="w-full py-10 border-2 border-[#134e4a] border-dashed rounded-[2.5rem] flex flex-col items-center justify-center gap-2 text-[#134e4a] bg-teal-50/30"
+    >
+      <Camera size={28} />
+      <span className="text-xs font-black uppercase tracking-widest">Use Live Camera</span>
+    </button>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full py-6 border-2 border-gray-100 rounded-[2rem] flex items-center justify-center gap-3 text-gray-500 bg-white shadow-sm"
-          >
-            {scanning ? <Loader2 className="animate-spin" size={20} /> : <ImageIcon size={20} />}
-            <span className="text-xs font-black uppercase tracking-widest">Upload from Gallery</span>
-          </button>
-
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileUpload} 
-            accept="image/*" 
-            className="hidden" 
-          />
-        </div>
+    <button
+      type="button" // ALIGNMENT: Explicitly set type to button to prevent form submission issues
+      onClick={() => fileInputRef.current?.click()}
+      disabled={scanning} // Prevent double-clicks while scanning
+      className="w-full py-6 border-2 border-gray-100 rounded-[2rem] flex items-center justify-center gap-3 text-gray-500 bg-white shadow-sm active:bg-gray-50 transition-colors"
+    >
+      {scanning ? (
+        <RefreshCw className="animate-spin text-teal-600" size={20} />
+      ) : (
+        <ImageIcon size={20} />
       )}
+      <span className="text-xs font-black uppercase tracking-widest">
+        {scanning ? "Reading Receipt..." : "Upload from Gallery"}
+      </span>
+    </button>
 
+    <input 
+      type="file" 
+      ref={fileInputRef} 
+      onChange={handleFileUpload} 
+      accept="image/*" 
+      className="hidden" 
+      /* Key Fix: Reset value after change so the same file can be uploaded twice if needed */
+      onClick={(e) => ((e.target as HTMLInputElement).value = "")}
+    />
+  </div>
+)}
       {/* CAMERA MODAL */}
       <AnimatePresence>
         {cameraActive && (
