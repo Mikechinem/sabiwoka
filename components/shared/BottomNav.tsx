@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, ShoppingBag, ShieldCheck, Wallet, LayoutDashboard } from "lucide-react";
+import { Package, ShoppingBag, ShieldCheck, Wallet, LayoutDashboard } from "lucide-react";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { name: "Leads", href: "/leads", icon: Users },
+  { name: "Inventory", href: "/inventory", icon: Package },
   { name: "Sales", href: "/sales", icon: ShoppingBag },
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
   { name: "Scanner", href: "/scanner", icon: ShieldCheck },
@@ -28,19 +28,13 @@ export default function BottomNav() {
               <div className="flex flex-col items-center gap-1 px-3">
                 <motion.div
                   whileTap={{ scale: 0.8 }}
-                  className={`${
-                    isActive ? "text-[#134e4a]" : "text-gray-400"
-                  } transition-colors`}
+                  className={`${isActive ? "text-[#134e4a]" : "text-gray-400"} transition-colors`}
                 >
                   <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                 </motion.div>
-                <span className={`text-[10px] font-bold ${
-                  isActive ? "text-[#134e4a]" : "text-gray-400"
-                }`}>
+                <span className={`text-[10px] font-bold ${isActive ? "text-[#134e4a]" : "text-gray-400"}`}>
                   {item.name}
                 </span>
-                
-                {/* Active Indicator Dot */}
                 {isActive && (
                   <motion.div
                     layoutId="nav-dot"

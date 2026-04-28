@@ -6,4 +6,4 @@ export const groq = new Groq({
 });
 
 // Set the global model here so you only change it once for the whole app
-export const GROQ_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";

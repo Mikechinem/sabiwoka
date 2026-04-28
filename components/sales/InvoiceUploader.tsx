@@ -1,67 +1,113 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload, Loader2, Sparkles } from "lucide-react";
+import { Camera, RefreshCw } from "lucide-react";
 
 interface Props {
-  onDataExtracted: (data: any) => void; // This sends the data back to your main form
+  onDataExtracted: (data: any) => void;
+  scanType?: "sale" | "inventory";
 }
 
-export default function InvoiceUploader({ onDataExtracted }: Props) {
-  const [loading, setLoading] = useState(false);
+export default function InvoiceUploader({ onDataExtracted, scanType = "inventory" }: Props) {
+  const [scanning, setScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const compressImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+    });
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setLoading(true);
+    setScanning(true);
     const reader = new FileReader();
+
     reader.onloadend = async () => {
-      const base64Image = (reader.result as string).split(",")[1];
-      
+      const originalBase64 = reader.result as string;
+      const compressedBase64 = await compressImage(originalBase64);
+
       try {
         const response = await fetch("/api/ai/invoice-scan", {
           method: "POST",
-          body: JSON.stringify({ image: base64Image }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: compressedBase64,
+            scanType: scanType,
+          }),
         });
-        const data = await response.json();
-        
-        // Pass the AI-extracted data to the form
-        onDataExtracted(data); 
-      } catch (err) {
-        alert("Could not read receipt details.");
+
+        const text = await response.text();
+
+        let data: any;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Server returned an unexpected response. Please try again.");
+        }
+
+        if (data.error) throw new Error(data.error);
+
+        // MAGIC: Send the data straight up to the global modal!
+        onDataExtracted(data);
+
+      } catch (error: any) {
+        console.error("Scan error:", error);
+        alert(`AI Error: ${error.message || "Could not read image"}`);
       } finally {
-        setLoading(false);
+        setScanning(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
+
     reader.readAsDataURL(file);
   };
 
   return (
-    <div className="mb-4">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleUpload} 
-        accept="image/*" 
-        className="hidden" 
-      />
+    <div className="mb-6">
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        disabled={loading}
-        className="w-full py-4 border-2 border-dashed border-teal-200 rounded-2xl bg-teal-50/50 flex items-center justify-center gap-2 text-[#134e4a] transition-all active:scale-95"
+        disabled={scanning}
+        className="w-full py-5 border-2 border-dashed border-[#134e4a]/20 rounded-2xl flex flex-col items-center justify-center gap-2 text-[#134e4a] bg-teal-50/30 active:scale-[0.98]"
       >
-        {loading ? (
-          <Loader2 className="animate-spin" size={18} />
+        {scanning ? (
+          <RefreshCw className="animate-spin text-teal-600" size={24} />
         ) : (
-          <>
-            <Sparkles size={18} className="text-teal-600" />
-            <span className="text-xs font-black uppercase tracking-widest">Auto-Fill from Receipt</span>
-          </>
+          <Camera size={24} />
         )}
+        <p className="text-[10px] font-black uppercase tracking-widest">
+          {scanning
+            ? "SabiWoka AI Reading..."
+            : `Auto-Fill ${scanType === "sale" ? "Sale" : "Inventory"}`}
+        </p>
       </button>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleUpload}
+        accept="image/*"
+        className="hidden"
+      />
     </div>
   );
 }

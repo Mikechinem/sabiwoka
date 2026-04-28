@@ -35,14 +35,24 @@ export default function LeadDetailPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUpdating(false); return; }
 
-    // 1 — Update lead status to paid
+    // 1 — Check if a sale was already created for this lead to prevent duplicates
+    const { data: existingSale } = await supabase
+      .from("sales")
+      .select("id")
+      .eq("lead_id", lead.id)
+      .single();
+
+    // 2 — Update lead status to paid
     await supabase
       .from("leads")
       .update({ status: "paid" })
       .eq("id", lead.id);
 
-    // 2 — Auto-create a sale record from this lead
-    if (lead.amount) {
+    // 3 — Only create sale if one doesn't already exist for this lead
+    if (!existingSale && lead.amount) {
+      const soldAt = new Date();
+      soldAt.setSeconds(0, 0);
+
       const { data: saleData } = await supabase
         .from("sales")
         .insert({
@@ -55,15 +65,23 @@ export default function LeadDetailPage() {
           payment_status: "paid",
           input_method: "magic_paste",
           notes: `Converted from lead — ${lead.item_of_interest ?? ""}`,
-          sold_at: new Date().toISOString(),
+          sold_at: soldAt.toISOString(),
         })
         .select()
         .single();
 
-      // 3 — Add sale item if item exists
+      // 4 — Add sale item and link to inventory product if it exists
       if (saleData && lead.item_of_interest) {
+        const { data: matchedProduct } = await supabase
+          .from("products")
+          .select("id")
+          .eq("user_id", user.id)
+          .ilike("name", lead.item_of_interest.trim())
+          .single();
+
         await supabase.from("sale_items").insert({
           sale_id: saleData.id,
+          product_id: matchedProduct?.id ?? null,
           product_name: lead.item_of_interest,
           quantity: 1,
           unit_price: lead.amount,
@@ -75,7 +93,6 @@ export default function LeadDetailPage() {
     setUpdating(false);
   }
 
-  // --- NEW: Mark as Lost Function ---
   async function markAsLost() {
     if (!lead) return;
     setUpdating(true);
@@ -104,7 +121,6 @@ export default function LeadDetailPage() {
     </div>
   );
 
-  // Helper to check if lead is finished
   const isClosed = lead.status === "paid" || lead.status === "lost";
 
   return (
@@ -119,14 +135,16 @@ export default function LeadDetailPage() {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4 ${isClosed ? 'opacity-80' : ''}`}
+        className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4 ${isClosed ? "opacity-80" : ""}`}
       >
         <div className="flex justify-between items-start mb-1">
           <h1 className="text-xl font-bold text-gray-900">{lead.full_name}</h1>
           {isClosed && (
-             <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${lead.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-               {lead.status}
-             </span>
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${
+              lead.status === "paid" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+            }`}>
+              {lead.status}
+            </span>
           )}
         </div>
 
@@ -156,7 +174,6 @@ export default function LeadDetailPage() {
       </motion.div>
 
       <div className="flex flex-col gap-3">
-        {/* Only show contact/action buttons if NOT closed */}
         {!isClosed ? (
           <>
             {lead.whatsapp_url && (
@@ -181,19 +198,18 @@ export default function LeadDetailPage() {
               {updating ? "Updating..." : "Mark as Paid — Move to Sales"}
             </motion.button>
 
-           <button
-          onClick={markAsLost}
-       disabled={updating}
-        className="w-full h-12 rounded-full font-bold text-sm text-gray-500 bg-transparent border-2 border-gray-200 active:bg-gray-100 transition-all"
-      >
-        {updating ? "Updating..." : "Mark as Lost"}
-        </button>
+            <button
+              onClick={markAsLost}
+              disabled={updating}
+              className="w-full h-12 rounded-full font-bold text-sm text-gray-500 bg-transparent border-2 border-gray-200 active:bg-gray-100 transition-all"
+            >
+              {updating ? "Updating..." : "Mark as Lost"}
+            </button>
           </>
-            ) : (
-          /* Feedback View for Closed Leads */
+        ) : (
           <div className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold border ${
-            lead.status === "paid" 
-              ? "text-[#2eb966] bg-green-50 border-green-100" 
+            lead.status === "paid"
+              ? "text-[#2eb966] bg-green-50 border-green-100"
               : "text-gray-500 bg-gray-100 border-gray-200"
           }`}>
             {lead.status === "paid" ? (

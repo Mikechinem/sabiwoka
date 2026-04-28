@@ -4,35 +4,27 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Mic, 
-  Square, 
   CheckCircle2, 
   AlertCircle, 
-  Send, 
-  RotateCcw, 
-  Loader2 // Added missing import
+  Loader2 
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
-type RecordingState = "idle" | "recording" | "processing" | "preview" | "saving" | "success";
+type RecordingState = "idle" | "recording" | "processing" | "success";
 
-export default function VoiceRecorder() {
+interface Props {
+  onDataExtracted?: (data: any) => void;
+}
+
+export default function VoiceRecorder({ onDataExtracted }: Props) {
   const [state, setState] = useState<RecordingState>("idle");
-  const [transcript, setTranscript] = useState("");
-  const [preview, setPreview] = useState<any>(null);
   const [error, setError] = useState("");
   const [duration, setDuration] = useState(0);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const updatePreview = (key: string, value: string | number) => {
-    setPreview((prev: any) => ({ ...prev, [key]: value }));
-  };
-
   async function startRecording() {
     setError("");
-    setTranscript("");
-    setPreview(null);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -69,9 +61,13 @@ export default function VoiceRecorder() {
             return;
           }
 
-          setTranscript(data.transcript);
-          setPreview(data.sale);
-          setState("preview");
+          // MAGIC: Pass data to the main form instead of handling it locally!
+          if (onDataExtracted) {
+             onDataExtracted(data.sale);
+          }
+
+          setState("success");
+          setTimeout(() => setState("idle"), 3000);
 
         } catch (err: any) {
           setError(err.message || "Something went wrong");
@@ -98,70 +94,6 @@ export default function VoiceRecorder() {
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
-  async function handleConfirm() {
-    if (!preview) return;
-    setState("saving");
-
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not logged in");
-
-      const total = parseFloat(preview.total_amount) || 0;
-      const paid = parseFloat(preview.amount_paid) || 0;
-      const paymentStatus = paid === 0 ? "unpaid" : paid >= total ? "paid" : "partial";
-
-      const { data: saleData, error: saleError } = await supabase
-        .from("sales")
-        .insert({
-          user_id: user.id,
-          customer_name: preview.customer_name || "Walk-in Customer",
-          customer_phone: preview.customer_phone || null,
-          total_amount: total,
-          amount_paid: paid,
-          payment_status: paymentStatus,
-          input_method: "voice",
-          notes: preview.notes || null,
-          sold_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (saleError) throw saleError;
-
-      if (preview.item_name) {
-        await supabase.from("sale_items").insert({
-          sale_id: saleData.id,
-          product_name: preview.item_name,
-          quantity: 1,
-          unit_price: total,
-        });
-      }
-
-      if (paymentStatus !== "paid") {
-        await supabase.from("debts").insert({
-          user_id: user.id,
-          sale_id: saleData.id,
-          customer_name: preview.customer_name || "Walk-in Customer",
-          customer_phone: preview.customer_phone || null,
-          total_amount: total,
-          amount_paid: paid,
-          is_settled: false,
-        });
-      }
-
-      setState("success");
-      setTimeout(() => {
-        setState("idle");
-        setPreview(null);
-      }, 3000);
-
-    } catch (err: any) {
-      setError(err.message);
-      setState("preview");
-    }
-  }
-
   return (
     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-5 mb-4">
       <div className="flex items-center justify-between mb-4">
@@ -174,7 +106,7 @@ export default function VoiceRecorder() {
         <AnimatePresence>
           {state === "success" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1 text-[#2eb966] text-[10px] font-black uppercase">
-              <CheckCircle2 size={12} /> Saved!
+              <CheckCircle2 size={12} /> Ready for review!
             </motion.div>
           )}
         </AnimatePresence>
@@ -219,58 +151,6 @@ export default function VoiceRecorder() {
           <Loader2 className="animate-spin text-[#134e4a]" size={24} />
           <p className="text-xs font-bold text-gray-400 uppercase">Analyzing your voice...</p>
         </div>
-      )}
-
-      {/* Logic fix here: checking for 'preview' OR 'saving' to avoid TypeScript union overlap errors */}
-      {(state === "preview" || state === "saving") && preview && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="px-3 py-2 bg-gray-50 rounded-xl mb-4">
-            <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Transcript</p>
-            <p className="text-xs text-gray-600 italic">"{transcript}"</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3">
-            {[
-              { label: "Customer Name", key: "customer_name", type: "text" },
-              { label: "Phone Number", key: "customer_phone", type: "tel" },
-              { label: "Item Sold", key: "item_name", type: "text" },
-              { label: "Total Amount", key: "total_amount", type: "number" },
-              { label: "Amount Paid", key: "amount_paid", type: "number" },
-              { label: "Notes", key: "notes", type: "text" },
-            ].map((field) => (
-              <div key={field.key}>
-                <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-1 block">
-                  {field.label}
-                </label>
-                <input
-                  type={field.type}
-                  value={preview[field.key] || ""}
-                  onChange={(e) => updatePreview(field.key, e.target.value)}
-                  className="w-full h-11 px-4 bg-gray-50 rounded-xl text-sm font-semibold text-gray-800 border border-transparent focus:border-[#134e4a] focus:bg-white outline-none transition-all"
-                  placeholder={`Edit ${field.label.toLowerCase()}...`}
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button 
-              onClick={() => setState("idle")} 
-              disabled={state === "saving"}
-              className="flex-1 h-12 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold uppercase flex items-center justify-center gap-2"
-            >
-              <RotateCcw size={14} /> Redo
-            </button>
-            <button 
-              onClick={handleConfirm} 
-              disabled={state === "saving"} 
-              className="flex-[2] h-12 rounded-xl bg-[#134e4a] text-white text-xs font-bold uppercase flex items-center justify-center gap-2 shadow-lg shadow-[#134e4a]/20"
-            >
-              {state === "saving" ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-              Confirm Sale
-            </button>
-          </div>
-        </motion.div>
       )}
     </div>
   );

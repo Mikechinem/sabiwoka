@@ -1,141 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client"; // Needed for the reminder update
 import { Wallet, MessageCircle, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-
-type Debt = {
-  id: string;
-  sale_id: string | null;
-  customer_name: string;
-  customer_phone: string | null;
-  total_amount: number;
-  amount_paid: number;
-  balance: number;
-  is_settled: boolean;
-  created_at: string;
-  updated_at: string;
-  reminder_count: number;
-  last_reminder_sent_at: string | null;
-};
+import { useDebts } from "@/hooks/useDebts"; 
+import { Debt } from "@/types/debt";       
 
 export default function DebtsPage() {
-  const [debts, setDebts] = useState<Debt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { debts, loading, settleDebt } = useDebts();
   const [tab, setTab] = useState<"outstanding" | "settled">("outstanding");
   const [settling, setSettling] = useState<string | null>(null);
 
-  useEffect(() => {
-    const supabase = createClient();
-
-    async function fetchDebts() {
-      const { data, error } = await supabase
-        .from("debts")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (!error && data) setDebts(data as Debt[]);
-      setLoading(false);
-    }
-
-    fetchDebts();
-
-    const channel = supabase
-      .channel("debts-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "debts" }, () => {
-        fetchDebts();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  async function settleDebt(debt: Debt) {
-    setSettling(debt.id);
-    const supabase = createClient();
-
-    // 1 — Mark debt as settled and set amount_paid to full total
-    await supabase
-      .from("debts")
-      .update({
-        is_settled: true,
-        amount_paid: debt.total_amount,
-      })
-      .eq("id", debt.id);
-
-    // 2 — Update the linked sale to fully paid so revenue reflects correctly
-    if (debt.sale_id) {
-      await supabase
-        .from("sales")
-        .update({
-          amount_paid: debt.total_amount,
-          payment_status: "paid",
-        })
-        .eq("id", debt.sale_id);
-    }
-
-    setSettling(null);
-  }
-
-  async function sendReminder(debt: Debt) {
-    if (!debt.customer_phone) return;
-    const message = encodeURIComponent(
-      `Hi ${debt.customer_name}, just a reminder that you have an outstanding balance of ₦${Number(debt.balance).toLocaleString()}. Kindly make payment at your earliest convenience. Thank you!`
-    );
-    const phone = debt.customer_phone.replace(/[^0-9]/g, "");
-    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
-
-    const supabase = createClient();
-    await supabase
-      .from("debts")
-      .update({
-        reminder_count: debt.reminder_count + 1,
-        last_reminder_sent_at: new Date().toISOString(),
-      })
-      .eq("id", debt.id);
-  }
-
+  // Helper: Filter logic
   const outstanding = debts.filter((d) => !d.is_settled);
   const settled = debts.filter((d) => d.is_settled);
   const displayed = tab === "outstanding" ? outstanding : settled;
   const totalOutstanding = outstanding.reduce((sum, d) => sum + Number(d.balance), 0);
 
+  // Helper: Date formatting
   function daysSince(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime();
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   }
 
+  // --- FIXED & RESTORED: WhatsApp Reminder Logic ---
+  async function sendReminder(debt: Debt) {
+    if (!debt.customer_phone) return;
+
+    // 1. Construct Message
+    const message = encodeURIComponent(
+      `Hi ${debt.customer_name}, just a reminder that you have an outstanding balance of ₦${Number(debt.balance).toLocaleString()}. Kindly make payment at your earliest convenience. Thank you!`
+    );
+
+    // 2. Clean Phone Number (Essential for WhatsApp redirection)
+    // Removes all non-numeric characters
+    const cleanPhone = debt.customer_phone.replace(/\D/g, "");
+    
+    // Auto-fix for Nigerian numbers starting with 0
+    const finalPhone = cleanPhone.startsWith('0') ? `234${cleanPhone.slice(1)}` : cleanPhone;
+
+    // 3. Open WhatsApp
+    window.open(`https://wa.me/${finalPhone}?text=${message}`, "_blank");
+
+    // 4. Background DB Update (Log the reminder)
+    const supabase = createClient();
+    await supabase
+      .from("debts")
+      .update({
+        reminder_count: (debt.reminder_count || 0) + 1,
+        last_reminder_sent_at: new Date().toISOString(),
+      })
+      .eq("id", debt.id);
+  }
+
+  // Wrapper for settlement to handle local button loading state
+  async function handleSettle(debt: Debt) {
+    setSettling(debt.id);
+    await settleDebt(debt);
+    setSettling(null);
+  }
+
   return (
     <div className="max-w-md mx-auto px-4 pt-24 pb-28">
-    <header className="relative mb-6 pt-2">
-  <div className="relative z-10">
-    {/* Small tag to categorize the page */}
-    <p className="text-[10px] font-black text-[#134e4a] uppercase tracking-[0.2em] mb-1 ml-0.5">
-      Debt Collection
-    </p>
+      <header className="relative mb-6 pt-2">
+        <div className="relative z-10">
+          <p className="text-[10px] font-black text-[#134e4a] uppercase tracking-[0.2em] mb-1 ml-0.5">
+            Debt Collection
+          </p>
 
-    {/* Scaled down title to stop competing with the Top Logo */}
-    <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-2">
-      Money Outside ⏳
-    </h1>
-    
-    <div className="flex items-center gap-2 bg-red-50 w-fit px-3 py-1.5 rounded-xl border border-red-100">
-      <p className="text-gray-500 font-bold text-[10px] uppercase tracking-wider">
-        Total to collect:
-      </p>
-      <span className="text-base font-black text-red-600">
-        ₦{totalOutstanding.toLocaleString()}
-      </span>
-    </div>
-    
-    {/* Supportive Subtext - kept clean */}
-    <p className="text-[11px] text-[#134e4a] font-bold mt-3 italic opacity-80">
-      {totalOutstanding > 0 
-        ? "Time to follow up and bring that money home! 🏠" 
-        : "Every kobo is accounted for. Great job! ✨"}
-    </p>
-  </div>
-</header>
+          <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-2">
+            Money Outside ⏳
+          </h1>
+          
+          <div className="flex items-center gap-2 bg-red-50 w-fit px-3 py-1.5 rounded-xl border border-red-100">
+            <p className="text-gray-500 font-bold text-[10px] uppercase tracking-wider">
+              Total to collect:
+            </p>
+            <span className="text-base font-black text-red-600">
+              ₦{totalOutstanding.toLocaleString()}
+            </span>
+          </div>
+          
+          <p className="text-[11px] text-[#134e4a] font-bold mt-3 italic opacity-80">
+            {totalOutstanding > 0 
+              ? "Time to follow up and bring that money home! 🏠" 
+              : "Every kobo is accounted for. Great job! ✨"}
+          </p>
+        </div>
+      </header>
 
       {/* Tabs */}
       <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
@@ -220,7 +173,7 @@ export default function DebtsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Paid</p>
-                      <p className="font-bold" style={{ color: "#2eb966" }}>
+                      <p className="font-bold text-[#2eb966]">
                         ₦{Number(debt.amount_paid).toLocaleString()}
                       </p>
                     </div>
@@ -256,7 +209,7 @@ export default function DebtsPage() {
                       )}
                       <motion.button
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => settleDebt(debt)}
+                        onClick={() => handleSettle(debt)}
                         disabled={settling === debt.id}
                         className="flex-1 h-10 rounded-full text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60"
                         style={{ background: "#134e4a" }}

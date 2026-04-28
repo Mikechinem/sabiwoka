@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, Users, Wallet, Plus, Package, Loader2, ChevronRight } from "lucide-react";
+import { TrendingUp, Wallet, Plus, Package, Loader2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DynamicGreeting from "@/components/dashboard/DynamicGreeting";
+import FollowUpAlert from "@/components/leads/FollowUpAlert";
 import { useSales } from "@/hooks/useSales"; 
+
+// NEW IMPORTS
+import RevenueCard from "@/components/dashboard/RevenueCard";
+import LeadCountCard from "@/components/dashboard/LeadCountCard";
+import TopSellingItem from "@/components/dashboard/TopSellingItem";
 
 export default function HomeDashboard() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -14,7 +20,7 @@ export default function HomeDashboard() {
   const [roi, setRoi] = useState(0);
   const [totalUnpaid, setTotalUnpaid] = useState(0);
   
-  const { todayTotalCash } = useSales(); 
+  const { todaySales } = useSales(); 
 
   useEffect(() => {
     const supabase = createClient();
@@ -61,10 +67,12 @@ export default function HomeDashboard() {
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "debts" }, fetchDashboardData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, fetchDashboardData)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "leads" }, fetchDashboardData)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -76,46 +84,17 @@ export default function HomeDashboard() {
 
       <header className="mb-8">
         <DynamicGreeting />
+        <FollowUpAlert />
       </header>
 
       <div className="relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-[#134e4a] rounded-[2.5rem] p-7 text-white mb-6 shadow-2xl relative overflow-hidden"
-        >
-          <div className="relative z-10">
-            <p className="text-teal-100/70 text-[10px] font-bold uppercase tracking-[0.2em]">
-              Revenue (Sales + Debts Recovered)
-            </p>
-            <h2 className="text-4xl font-black mt-1 mb-5">
-              ₦{(todayTotalCash || 0).toLocaleString()}
-            </h2>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-teal-200 text-[11px] font-semibold">
-                <TrendingUp size={14} />
-                <span>Resets at midnight</span>
-              </div>
-              <Link href="/sales">
-                <div className="bg-white rounded-full px-5 py-2.5 text-[#134e4a] text-xs font-black shadow-lg">
-                  + New Sale
-                </div>
-              </Link>
-            </div>
-          </div>
-          <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
-        </motion.div>
+        {/* COMPONENT SWAP: REVENUE CARD */}
+        <RevenueCard amount={todaySales} />
 
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <Link href="/leads" className="bg-white/90 p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-3">
-            <div className="w-10 h-10 bg-[#e1ae1b]/10 rounded-2xl flex items-center justify-center text-[#e1ae1b]">
-              <Users size={20} />
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Customer pipeline</p>
-              <p className="text-xl font-bold text-gray-900">{leads.length}</p>
-            </div>
-          </Link>
+          {/* COMPONENT SWAP: LEAD COUNT CARD */}
+          <LeadCountCard count={leads.length} />
+
           <Link href="/debts" className="bg-white/90 p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-3">
             <div className="w-10 h-10 bg-red-50 rounded-2xl flex items-center justify-center text-red-500">
               <Wallet size={20} />
@@ -126,6 +105,7 @@ export default function HomeDashboard() {
             </div>
           </Link>
         </div>
+       
 
         <div className="mt-4">
           <div className="flex justify-between items-center mb-4 px-1">
@@ -147,85 +127,53 @@ export default function HomeDashboard() {
                     whileTap={{ scale: 0.98 }}
                     className="bg-white p-5 rounded-[2.2rem] shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden"
                   >
-                    {lead.intent_level === "high" && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500" />
-                    )}
+                    {lead.intent_level === "high" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500" />}
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-sm border ${
-                        lead.intent_level === "high"
-                          ? "bg-green-50 border-green-100 text-green-700"
-                          : "bg-orange-50 border-orange-100 text-orange-600"
-                      }`}>
-                        <span className="text-[10px] font-black uppercase leading-none">
-                          {lead.intent_level === "high" ? "High" : "Med"}
-                        </span>
+                      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-sm border ${lead.intent_level === "high" ? "bg-green-50 border-green-100 text-green-700" : "bg-orange-50 border-orange-100 text-orange-600"}`}>
+                        <span className="text-[10px] font-black uppercase leading-none">{lead.intent_level === "high" ? "High" : "Med"}</span>
                         <TrendingUp size={12} className="mt-1 opacity-70" />
                       </div>
                       <div>
-                        <p className="text-[14px] font-black text-gray-900 leading-none mb-1.5">
-                          {lead.full_name}
-                        </p>
-                        <p className="text-[11px] text-gray-400 font-medium italic">
-                          ₦{Number(lead.amount || 0).toLocaleString()}
-                        </p>
+                        <p className="text-[14px] font-black text-gray-900 leading-none mb-1.5">{lead.full_name}</p>
+                        <p className="text-[11px] text-gray-400 font-medium italic">₦{Number(lead.amount || 0).toLocaleString()}</p>
                       </div>
                     </div>
-                    <div className="bg-gray-50 p-2.5 rounded-2xl text-[#134e4a]">
-                      <ChevronRight size={18} />
-                    </div>
+                    <div className="bg-gray-50 p-2.5 rounded-2xl text-[#134e4a]"><ChevronRight size={18} /></div>
                   </motion.div>
                 </Link>
               ))
             ) : (
               <div className="text-center py-10 bg-white rounded-[2rem] border-2 border-dashed border-gray-100">
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">
-                  No priority leads right now
-                </p>
+                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">No priority leads right now</p>
               </div>
             )}
-
-            <Link href="/leads" className="flex justify-center py-2">
-              <span className="text-[11px] font-bold text-[#134e4a] border-b border-[#134e4a] pb-0.5">
-                View all leads
-              </span>
-            </Link>
+            <Link href="/leads" className="flex justify-center py-2"><span className="text-[11px] font-bold text-[#134e4a] border-b border-[#134e4a] pb-0.5">View all leads</span></Link>
           </div>
 
           <div className="bg-[#1b1d2e] p-6 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden mb-6">
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={14} className="text-[#e1ae1b]" />
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e1ae1b]">
-                  Assistant Insight
-                </p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e1ae1b]">Assistant Insight</p>
               </div>
-              <p className="text-xs leading-relaxed text-gray-300 font-medium">
-                You have{" "}
-                <span className="text-white font-bold">₦{totalUnpaid.toLocaleString()}</span>{" "}
-                in pending debts. Recovering these will significantly boost your profit.
-              </p>
+              <p className="text-xs leading-relaxed text-gray-300 font-medium">You have <span className="text-white font-bold">₦{totalUnpaid.toLocaleString()}</span> in pending debts. Recovering these will significantly boost your profit.</p>
             </div>
           </div>
 
-          <Link href="/inventory">
-            <motion.div
-              whileTap={{ scale: 0.98 }}
-              className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center justify-between"
-            >
+           <div className="mb-6">
+            <TopSellingItem />
+          </div>
+
+          <Link href="/leads">
+            <motion.div whileTap={{ scale: 0.98 }} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-[#134e4a]/10 rounded-2xl flex items-center justify-center text-[#134e4a]">
-                  <Package size={24} />
-                </div>
+                <div className="w-12 h-12 bg-[#134e4a]/10 rounded-2xl flex items-center justify-center text-[#134e4a]"><Package size={24} /></div>
                 <div>
-                  <p className="text-sm font-black text-gray-900 leading-tight">Manage Inventory</p>
-                  <p className="text-[11px] text-gray-400 font-medium italic">
-                    Restock items and monitor your supply
-                  </p>
+                  <p className="text-sm font-black text-gray-900 leading-tight">Add Customer</p>
+                   <p className="text-[11px] text-gray-400 font-medium italic">Capture a new lead or walk-in customer</p>
                 </div>
               </div>
-              <div className="bg-[#134e4a] p-2 rounded-xl text-white shadow-lg">
-                <Plus size={20} strokeWidth={3} />
-              </div>
+              <div className="bg-[#134e4a] p-2 rounded-xl text-white shadow-lg"><Plus size={20} strokeWidth={3} /></div>
             </motion.div>
           </Link>
         </div>

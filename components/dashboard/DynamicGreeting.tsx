@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DynamicGreeting() {
   const [displayText, setDisplayText] = useState("");
@@ -9,24 +9,32 @@ export default function DynamicGreeting() {
   const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Initialize once to prevent auth-lock collisions
+  const supabase = createClient();
 
   useEffect(() => {
     async function getIdentity() {
-      const { data: { user } } = await supabase.auth.getUser();
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
 
-      let name = "Boss";
-      if (user?.user_metadata?.full_name) {
-        name = user.user_metadata.full_name.split(" ")[0];
-      } else if (user?.email) {
-        name = user.email.split("@")[0];
+        const user = session?.user;
+        let name = "Boss";
+
+        if (user?.user_metadata?.full_name) {
+          name = user.user_metadata.full_name.split(" ")[0];
+        } else if (user?.email) {
+          name = user.email.split("@")[0];
+        }
+
+        setFirstName(name);
+      } catch (err) {
+        console.error("Auth sync issue:", err);
+        setFirstName("Boss");
+      } finally {
+        setLoading(false);
       }
-
-      setFirstName(name);
-      setLoading(false);
     }
 
     getIdentity();
@@ -39,22 +47,27 @@ export default function DynamicGreeting() {
     const hour = now.getHours();
     const day = now.getDay();
 
+    // RESTORED: Night Owl Logic
     if (hour >= 0 && hour < 5)
       return `Doing night owl things, ${firstName}? 🦉 Take it easy o.`;
 
+    // RESTORED: Morning & Monday Energy
     if (hour >= 5 && hour < 12)
       return day === 1
         ? `Monday energy, ${firstName}! 🚀 Let's get it.`
         : `Morning, ${firstName}! ☀️ Ready for the day?`;
 
+    // RESTORED: Nigerian Market Logic
     if (hour >= 12 && hour < 17)
       return `How's the market today, ${firstName}? ⚡ Hope light dey!`;
 
+    // RESTORED: Weekend Prep Logic
     if (hour >= 17 && hour < 22)
       return day === 5 || day === 6
         ? `Weekend prep mode, ${firstName}! 📦`
         : `Evening, ${firstName}. Great work today.`;
 
+    // RESTORED: Winding Down Logic
     return `Winding down, ${firstName}? 🌙 You've earned the rest.`;
   }, [firstName, loading]);
 
@@ -64,7 +77,7 @@ export default function DynamicGreeting() {
     setIndex(0);
   }, [fullMessage]);
 
-  // Typing effect (stable)
+  // Typing effect (Stable version)
   useEffect(() => {
     if (!fullMessage) return;
 
