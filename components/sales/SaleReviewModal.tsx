@@ -125,6 +125,13 @@ export default function SaleReviewModal({ data, onClose, onSuccess }: SaleReview
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev, 
+      { name: "", quantity: 1, unit_price: 0, product_id: null }
+    ]);
+  };
+
   async function handleConfirm() {
     if (items.length === 0) return;
     setSaving(true);
@@ -274,6 +281,15 @@ export default function SaleReviewModal({ data, onClose, onSuccess }: SaleReview
               </div>
             </div>
           ))}
+
+          {/* Add Another Item Button */}
+          <button
+            type="button"
+            onClick={addItem}
+            className="w-full py-3 mb-5 border-2 border-dashed border-[#134e4a]/30 text-[#134e4a] font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#134e4a]/5 transition-colors"
+          >
+            + Add Another Item
+          </button>
         </div>
 
         {/* Payment */}

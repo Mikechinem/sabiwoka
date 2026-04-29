@@ -31,6 +31,13 @@ export default function ScanReviewModal({ items, onClose, onSuccess }: ScanRevie
     setEditedItems(editedItems.filter((_, i) => i !== index));
   };
 
+  const addItem = () => {
+    setEditedItems((prev) => [
+      ...prev,
+      { name: "", quantity: 1, buying_price: 0, selling_price: 0 }
+    ]);
+  };
+
   async function handleConfirmSave() {
     if (editedItems.length === 0) return onClose();
     
@@ -144,6 +151,15 @@ export default function ScanReviewModal({ items, onClose, onSuccess }: ScanRevie
               </div>
             </div>
           ))}
+
+          {/* Add Another Item Button */}
+          <button
+            type="button"
+            onClick={addItem}
+            className="w-full py-3 border-2 border-dashed border-[#134e4a]/30 text-[#134e4a] font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#134e4a]/5 transition-colors"
+          >
+            + Add Another Item
+          </button>
         </div>
 
         <button 

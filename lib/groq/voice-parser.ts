@@ -30,7 +30,27 @@ export async function parseVoiceTranscript(transcript: string, mode: 'sales' | '
 
   const systemPrompts = {
     inventory: `You are an Inventory Assistant. Return JSON: { "items": [{ "name": string, "quantity": number, "buying_price": number }] }`,
-    sales: `You are a Sales Assistant. Return JSON: { "customer": string, "items": [{ "name": string, "quantity": number, "price": number }] }`,
+    
+    // FIXED: Removed "content:" and added a comma at the end!
+    sales: `You are an expert sales assistant. Extract the transaction details from the text.
+        
+        Return ONLY a JSON object in this exact format:
+        {
+          "customer_name": "string or null",
+          "customer_phone": "string or null",
+          "total_amount": number or null,
+          "amount_paid": number or null,
+          "items": [
+            { "name": "string", "quantity": number, "unit_price": number }
+          ]
+        }
+        
+        Guidelines:
+        - If multiple different items are mentioned, put each in the "items" array.
+        - If quantity is not mentioned, assume 1.
+        - total_amount is the sum of (quantity * unit_price) for all items.
+        - If amount_paid is not explicitly stated as partial, assume amount_paid equals total_amount.`, 
+        
     leads: `You are a Lead Generator. Return JSON: { "full_name": string, "phone": string, "intent": "high" | "medium" | "low" }`
   };
 

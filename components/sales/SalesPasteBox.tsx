@@ -33,9 +33,9 @@ export default function SalesPasteBox({ onDataExtracted }: Props) {
         return;
       }
 
-      // MAGIC: Pass data to main form!
+      // MAGIC: Pass data to main form (Bulletproofed to accept flat or wrapped JSON)
       if (onDataExtracted) {
-         onDataExtracted(data.sale);
+         onDataExtracted(data.sale || data);
       }
 
       setIsSuccess(true);
@@ -85,7 +85,8 @@ export default function SalesPasteBox({ onDataExtracted }: Props) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={isProcessing}
-        placeholder={`Type naturally... e.g. "Monica paid for red ankara, she gave me 10k, balance remains 5k"`}
+        // UPDATED HINT: Encourages typing multiple items!
+        placeholder={`e.g. "Monica bought a red bag for 10k and 2 pairs of shoes for 5k each. She paid 15k total."`}
         className="w-full h-20 p-3 bg-gray-50 rounded-xl text-sm border border-gray-100 focus:outline-none focus:ring-2 focus:ring-[#134e4a] transition-all resize-none disabled:opacity-50"
       />
 

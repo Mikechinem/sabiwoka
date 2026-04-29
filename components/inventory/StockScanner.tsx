@@ -16,11 +16,9 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
   const [showReview, setShowReview] = useState(false);
   const [scannedResults, setScannedResults] = useState<any[]>([]);
   
-  // Separate loading states so the user knows which button is working
   const [cameraScanning, setCameraScanning] = useState(false);
   const [galleryScanning, setGalleryScanning] = useState(false);
   
-  // Two explicit, separate inputs
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,7 +57,6 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
     });
   };
 
-  // One shared function to handle the image once it's picked/snapped
   const processImage = async (file: File, source: "camera" | "gallery") => {
     if (source === "camera") setCameraScanning(true);
     if (source === "gallery") setGalleryScanning(true);
@@ -93,7 +90,6 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
       } finally {
         setCameraScanning(false);
         setGalleryScanning(false);
-        // Reset both inputs so they can be clicked again
         if (cameraInputRef.current) cameraInputRef.current.value = "";
         if (galleryInputRef.current) galleryInputRef.current.value = "";
       }
@@ -147,7 +143,6 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
                 Point your camera at a physical stock list or invoice.
               </p>
 
-              {/* BUTTON 1: CAMERA */}
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
@@ -164,12 +159,11 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
                 </p>
               </button>
 
-              {/* INPUT 1: STRICTLY CAMERA */}
               <input
                 type="file"
                 ref={cameraInputRef}
                 accept="image/*"
-                capture="environment" // Forces the back camera on mobile
+                capture="environment"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) processImage(file, "camera");
@@ -183,7 +177,6 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
                 <div className="h-[1px] w-10 bg-gray-100" />
               </div>
 
-              {/* BUTTON 2: GALLERY */}
               <button
                 type="button"
                 onClick={() => galleryInputRef.current?.click()}
@@ -198,19 +191,16 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
                 {galleryScanning ? "Reading image..." : "Upload from Gallery"}
               </button>
 
-              {/* INPUT 2: STRICTLY GALLERY */}
               <input
                 type="file"
                 ref={galleryInputRef}
                 accept="image/*"
-                // Notice there is NO capture attribute here
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) processImage(file, "gallery");
                 }}
                 className="hidden"
               />
-
             </motion.div>
           )}
 
@@ -236,6 +226,7 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
             </motion.div>
           )}
 
+          {/* NEW MANUAL TAB - Triggers the Multi-Item Modal Instantly! */}
           {activeTab === "manual" && (
             <motion.div
               key="manual"
@@ -243,42 +234,19 @@ export default function StockScanner({ onComplete }: StockScannerProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <div className="space-y-4">
-                <input
-                  id="manual-name"
-                  placeholder="Product Name"
-                  className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-[#134e4a]/20 transition-all placeholder:font-medium"
-                />
-                <div className="flex gap-2">
-                  <input
-                    id="manual-qty"
-                    placeholder="Qty"
-                    type="number"
-                    className="w-1/3 p-4 bg-gray-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-[#134e4a]/20 transition-all placeholder:font-medium"
-                  />
-                  <input
-                    id="manual-cost"
-                    placeholder="Cost (₦)"
-                    type="number"
-                    className="w-2/3 p-4 bg-gray-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-[#134e4a]/20 transition-all placeholder:font-medium"
-                  />
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <div className="w-16 h-16 bg-[#134e4a]/10 rounded-full flex items-center justify-center mb-4 text-[#134e4a]">
+                  <PackagePlus size={32} />
                 </div>
+                <h3 className="font-bold text-gray-900 mb-2">Manual Entry</h3>
+                <p className="text-xs text-gray-500 mb-6 px-4">
+                  Open the multi-item form to manually type in your new stock details.
+                </p>
                 <button
-                  onClick={() => {
-                    const name = (document.getElementById("manual-name") as HTMLInputElement).value;
-                    const qty = (document.getElementById("manual-qty") as HTMLInputElement).value;
-                    const cost = (document.getElementById("manual-cost") as HTMLInputElement).value;
-                    if (!name || !qty || !cost) return alert("Fill all fields");
-                    triggerReview([{
-                      name,
-                      quantity: parseInt(qty),
-                      buying_price: parseInt(cost),
-                      selling_price: parseInt(cost) * 1.5,
-                    }]);
-                  }}
-                  className="w-full py-4 bg-[#134e4a] text-white rounded-2xl font-black text-sm mt-2 shadow-lg active:scale-95 transition-transform"
+                  onClick={() => triggerReview([{ name: "", quantity: 1, buying_price: 0, selling_price: 0 }])}
+                  className="w-full py-4 bg-[#134e4a] text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-transform"
                 >
-                  Review & Add Stock
+                  Add products
                 </button>
               </div>
             </motion.div>
