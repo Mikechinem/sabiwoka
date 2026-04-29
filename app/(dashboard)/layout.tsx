@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/shared/BottomNav";
 import SettingsDrawer from "@/components/shared/SettingsDrawer";
+import OfflineIndicator from "@/components/shared/OfflineIndicator";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Settings } from "lucide-react";
@@ -71,6 +72,7 @@ export default function DashboardLayout({
       </main>
 
       <BottomNav />
+      <OfflineIndicator />
 
       <SettingsDrawer 
         isOpen={showSettings} 
